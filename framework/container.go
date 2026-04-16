@@ -20,12 +20,12 @@ type registration struct {
 // Container 管理依賴的工廠函式與生命週期。
 type Container struct {
 	mu            sync.RWMutex
-	registrations map[string]*registration
+	registrations map[string]registration
 }
 
 // NewContainer 建立一個空的 Container。
 func NewContainer() *Container {
-	return &Container{registrations: make(map[string]*registration)}
+	return &Container{registrations: make(map[string]registration)}
 }
 
 // Register 向容器註冊一個依賴。
@@ -37,7 +37,7 @@ func (c *Container) Register(name string, factory func() any, s ...scope.Scope) 
 	if len(s) > 0 {
 		sc = s[0]
 	}
-	c.registrations[name] = &registration{factory: factory, scope: sc}
+	c.registrations[name] = registration{factory: factory, scope: sc}
 }
 
 // Resolve 從容器取得指定名稱的依賴實體，可在工廠函式中呼叫以解析鏈式依賴。

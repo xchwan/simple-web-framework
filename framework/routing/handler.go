@@ -1,5 +1,5 @@
-// Package framework 提供輕量的 HTTP 路由框架核心元件。
-package framework
+// Package routing 提供 HTTP 路由的核心介面與元件。
+package routing
 
 import "net/http"
 
@@ -7,7 +7,7 @@ import "net/http"
 type HandleResult int
 
 const (
-	// NotMatched 表示此 handler 完全不匹配（路徑不符），Router 繼續往下嘗試。
+	// NotMatched 表示此 handler 完全不匹配，Router 繼續往下嘗試。
 	NotMatched HandleResult = iota
 	// PathMatched 表示路徑符合但 Method 不符，Router 應回傳 405。
 	PathMatched HandleResult = iota
@@ -15,7 +15,7 @@ const (
 	Handled HandleResult = iota
 )
 
-// HttpHandler 是框架內所有元件共同實作的介面。
+// HttpHandler 是框架內所有路由元件共同實作的介面。
 type HttpHandler interface {
 	Handle(w http.ResponseWriter, r *http.Request) HandleResult
 }

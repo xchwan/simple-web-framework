@@ -40,7 +40,8 @@ func (c *Container) Register(name string, factory func() any, s ...scope.Scope) 
 	c.registrations[name] = &registration{factory: factory, scope: sc}
 }
 
-func (c *Container) get(ctx context.Context, name string) any {
+// Resolve 從容器取得指定名稱的依賴實體，可在工廠函式中呼叫以解析鏈式依賴。
+func (c *Container) Resolve(ctx context.Context, name string) any {
 	c.mu.RLock()
 	r, ok := c.registrations[name]
 	c.mu.RUnlock()
@@ -48,6 +49,10 @@ func (c *Container) get(ctx context.Context, name string) any {
 		return nil
 	}
 	return r.scope.Resolve(ctx, r.factory)
+}
+
+func (c *Container) get(ctx context.Context, name string) any {
+	return c.Resolve(ctx, name)
 }
 
 // injectContainer 將 container 注入 request context。

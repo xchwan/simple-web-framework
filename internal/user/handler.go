@@ -10,13 +10,17 @@ import (
 )
 
 // UserHandler 負責處理會員相關的 HTTP 請求。
-type UserHandler struct {
-	service *UserService
-}
+// service 在每個 request 時從 container 動態取得，以支援 HttpRequestScope。
+type UserHandler struct{}
 
 // NewUserHandler 建立一個 UserHandler。
-func NewUserHandler(service *UserService) *UserHandler {
-	return &UserHandler{service: service}
+func NewUserHandler() *UserHandler {
+	return &UserHandler{}
+}
+
+// service 從 request context 的 container 取得 UserService。
+func (h *UserHandler) service(r *http.Request) *UserService {
+	return framework.Get[*UserService](r, "userService")
 }
 
 // ===== Request / Response DTO =====
@@ -58,7 +62,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		framework.RespondText(w, r, http.StatusBadRequest, "Registration's format incorrect.")
 		return
 	}
-	u, err := h.service.Register(req.Email, req.Name, req.Password)
+	u, err := h.service(r).Register(req.Email, req.Name, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrEmailDuplicate):
@@ -82,7 +86,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		framework.RespondText(w, r, http.StatusBadRequest, "Login's format incorrect.")
 		return
 	}
-	u, err := h.service.Login(req.Email, req.Password)
+	u, err := h.service(r).Login(req.Email, req.Password)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrCredentialsInvalid):
@@ -103,7 +107,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 // UpdateName 處理 PATCH /api/users/{userId}。
 func (h *UserHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 	token := extractToken(r)
-	caller, err := h.service.Authenticate(token)
+	caller, err := h.service(r).Authenticate(token)
 	if err != nil {
 		framework.RespondText(w, r, http.StatusUnauthorized, "Can't authenticate who you are.")
 		return
@@ -121,7 +125,7 @@ func (h *UserHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateName(caller.ID, targetID, req.NewName); err != nil {
+	if err := h.service(r).UpdateName(caller.ID, targetID, req.NewName); err != nil {
 		switch {
 		case errors.Is(err, ErrForbidden):
 			framework.RespondText(w, r, http.StatusForbidden, "Forbidden")
@@ -136,13 +140,13 @@ func (h *UserHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 // SearchUsers 處理 GET /api/users。
 func (h *UserHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	token := extractToken(r)
-	if _, err := h.service.Authenticate(token); err != nil {
+	if _, err := h.service(r).Authenticate(token); err != nil {
 		framework.RespondText(w, r, http.StatusUnauthorized, "Can't authenticate who you are.")
 		return
 	}
 
 	keyword := r.URL.Query().Get("keyword")
-	users := h.service.SearchUsers(keyword)
+	users := h.service(r).SearchUsers(keyword)
 
 	result := make([]userResponse, len(users))
 	for i, u := range users {

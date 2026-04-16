@@ -50,6 +50,11 @@ func (ro *Router) DELETE(path string, f HandlerFunc) {
 	ro.Register(NewPathHandler(path, NewMethodHandler(http.MethodDelete, f)))
 }
 
+// PATCH 註冊一個 PATCH 路由。
+func (ro *Router) PATCH(path string, f HandlerFunc) {
+	ro.Register(NewPathHandler(path, NewMethodHandler(http.MethodPatch, f)))
+}
+
 // Run 啟動 HTTP server 並監聽指定 addr（如 ":8080"）。
 func (ro *Router) Run(addr string) error {
 	log.Printf("Server listening on %s", addr)

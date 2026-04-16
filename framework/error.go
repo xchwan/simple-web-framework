@@ -30,6 +30,11 @@ type ErrorBody struct {
 	Message string `json:"message"`
 }
 
+// Error 建立一個帶有訊息的 ErrorBody。
+func Error(message string) ErrorBody {
+	return ErrorBody{Message: message}
+}
+
 // defaultErrorHandler 是預設的錯誤處理，回傳 JSON 格式的錯誤訊息。
 func defaultErrorHandler(w http.ResponseWriter, r *http.Request, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")

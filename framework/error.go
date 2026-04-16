@@ -25,9 +25,8 @@ func loadErrorHandler(r *http.Request) ErrorHandlerFunc {
 	return defaultErrorHandler
 }
 
-// errorResponse 是預設的 JSON 錯誤回應格式。
-type errorResponse struct {
-	Code    int    `json:"code"`
+// ErrorBody 是統一的 JSON 錯誤回應格式。
+type ErrorBody struct {
 	Message string `json:"message"`
 }
 
@@ -35,8 +34,5 @@ type errorResponse struct {
 func defaultErrorHandler(w http.ResponseWriter, r *http.Request, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(errorResponse{
-		Code:    statusCode,
-		Message: http.StatusText(statusCode),
-	})
+	json.NewEncoder(w).Encode(ErrorBody{Message: http.StatusText(statusCode)})
 }

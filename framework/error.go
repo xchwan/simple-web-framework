@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/xchwan/simple-web-framework/framework/plugin"
+	"github.com/xchwan/simple-web-framework/framework/routing"
 )
 
 // ErrorHandlerFunc 統一處理所有 routing 層的 HTTP 錯誤回應（404、405）。
@@ -29,29 +30,24 @@ func storeErrorHandler(r *http.Request, f ErrorHandlerFunc) *http.Request {
 }
 
 func loadErrorHandler(r *http.Request) ErrorHandlerFunc {
-	if f, ok := r.Context().Value(errorHandlerKey{}).(ErrorHandlerFunc); ok {
-		return f
+	f, _ := r.Context().Value(errorHandlerKey{}).(ErrorHandlerFunc)
+	return f
+}
+
+// handleRoutingError 依路由匹配結果呼叫 errorHandler，回傳 404 或 405。
+func handleRoutingError(w http.ResponseWriter, r *http.Request, f ErrorHandlerFunc, best routing.HandleResult) {
+	switch best {
+	case routing.PathMatched:
+		f(w, r, http.StatusMethodNotAllowed)
+	default:
+		f(w, r, http.StatusNotFound)
 	}
-	return nil
 }
 
-// ===== exceptionMapper context =====
-
-type exceptionMapperKey struct{}
-
-func storeExceptionMapper(r *http.Request, m *plugin.ExceptionMapperPlugin) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), exceptionMapperKey{}, m))
-}
-
-func loadExceptionMapper(r *http.Request) *plugin.ExceptionMapperPlugin {
-	m, _ := r.Context().Value(exceptionMapperKey{}).(*plugin.ExceptionMapperPlugin)
-	return m
-}
-
-// HandleError 將 error 透過 ExceptionMapper 轉成對應的 HTTP 回應。
+// HandleError 將 error 透過 ExceptionMapperPlugin 轉成對應的 HTTP 回應。
 // 若沒有符合的規則，回傳 500。
 func HandleError(w http.ResponseWriter, r *http.Request, err error) {
-	if mapper := loadExceptionMapper(r); mapper != nil {
+	if mapper := plugin.LoadExceptionMapper(r); mapper != nil {
 		if code, msg, ok := mapper.Map(err); ok {
 			Respond(w, r, code, Error(msg))
 			return

@@ -55,8 +55,9 @@ func (c *Container) get(ctx context.Context, name string) any {
 	return c.Resolve(ctx, name)
 }
 
-// injectContainer 將 container 注入 request context。
+// injectContainer 將 container 注入 request context，同時注入 HttpRequestScope 所需的 store。
 func injectContainer(r *http.Request, c *Container) *http.Request {
+	r = scope.InjectRequestScopeStore(r)
 	return r.WithContext(context.WithValue(r.Context(), containerKey{}, c))
 }
 

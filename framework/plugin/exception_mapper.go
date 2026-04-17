@@ -1,6 +1,12 @@
 package plugin
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"net/http"
+)
+
+type exceptionMapperKey struct{}
 
 // exceptionRule 儲存一條 error → statusCode + message 的對應規則。
 type exceptionRule struct {
@@ -38,7 +44,16 @@ func (p *ExceptionMapperPlugin) Map(err error) (statusCode int, message string, 
 	return 0, "", false
 }
 
-// Install 實作 Plugin 介面，將自身註冊為 ExceptionMapper。
-func (p *ExceptionMapperPlugin) Install(r Registrar) {
-	r.RegisterExceptionMapper(p)
+// Install 實作 Plugin 介面，ExceptionMapperPlugin 透過 PrepareRequest 自行注入，無需向 Registrar 登記。
+func (p *ExceptionMapperPlugin) Install(_ Registrar) {}
+
+// PrepareRequest 實作 RequestPreparer，將自身注入 request context。
+func (p *ExceptionMapperPlugin) PrepareRequest(r *http.Request) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), exceptionMapperKey{}, p))
+}
+
+// LoadExceptionMapper 從 request context 取出 ExceptionMapperPlugin。
+func LoadExceptionMapper(r *http.Request) *ExceptionMapperPlugin {
+	m, _ := r.Context().Value(exceptionMapperKey{}).(*ExceptionMapperPlugin)
+	return m
 }

@@ -2,16 +2,12 @@ package framework
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"mime"
 	"net/http"
 
+	"github.com/xchwan/simple-web-framework/framework/builtin"
 	"github.com/xchwan/simple-web-framework/framework/plugin"
 )
-
-// ===== context 注入 / 查找 =====
 
 // codecKey 是在 context 中存取 codec registry 的 key。
 type codecKey struct{}
@@ -29,35 +25,5 @@ func lookupCodec(r *http.Request, contentType string) (string, plugin.Codec) {
 			return mt, c
 		}
 	}
-	return "application/json", &jsonCodec{}
-}
-
-// ===== 內建 Codec =====
-
-type jsonCodec struct{}
-
-func (c *jsonCodec) Encode(w io.Writer, v any) error {
-	return json.NewEncoder(w).Encode(v)
-}
-
-func (c *jsonCodec) Decode(r io.Reader, v any) error {
-	return json.NewDecoder(r).Decode(v)
-}
-
-type textCodec struct{}
-
-func (c *textCodec) Encode(w io.Writer, v any) error {
-	_, err := fmt.Fprint(w, v)
-	return err
-}
-
-func (c *textCodec) Decode(r io.Reader, v any) error {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return err
-	}
-	if s, ok := v.(*string); ok {
-		*s = string(data)
-	}
-	return nil
+	return "application/json", &builtin.JsonCodec{}
 }

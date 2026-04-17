@@ -2,28 +2,13 @@ package framework
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
+
+	"github.com/xchwan/simple-web-framework/framework/plugin"
 )
 
-// ErrorHandlerFunc 統一處理所有 HTTP 錯誤回應。
+// ErrorHandlerFunc 統一處理所有 routing 層的 HTTP 錯誤回應（404、405）。
 type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, statusCode int)
-
-// errorHandlerKey 是在 context 中存取 ErrorHandlerFunc 的 key。
-type errorHandlerKey struct{}
-
-// storeErrorHandler 將 ErrorHandlerFunc 存入 request context。
-func storeErrorHandler(r *http.Request, f ErrorHandlerFunc) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), errorHandlerKey{}, f))
-}
-
-// loadErrorHandler 從 request context 取出 ErrorHandlerFunc。
-func loadErrorHandler(r *http.Request) ErrorHandlerFunc {
-	if f, ok := r.Context().Value(errorHandlerKey{}).(ErrorHandlerFunc); ok {
-		return f
-	}
-	return defaultErrorHandler
-}
 
 // ErrorBody 是統一的 JSON 錯誤回應格式。
 type ErrorBody struct {
@@ -35,9 +20,42 @@ func Error(message string) ErrorBody {
 	return ErrorBody{Message: message}
 }
 
-// defaultErrorHandler 是預設的錯誤處理，回傳 JSON 格式的錯誤訊息。
-func defaultErrorHandler(w http.ResponseWriter, r *http.Request, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(ErrorBody{Message: http.StatusText(statusCode)})
+// ===== errorHandler context =====
+
+type errorHandlerKey struct{}
+
+func storeErrorHandler(r *http.Request, f ErrorHandlerFunc) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), errorHandlerKey{}, f))
+}
+
+func loadErrorHandler(r *http.Request) ErrorHandlerFunc {
+	if f, ok := r.Context().Value(errorHandlerKey{}).(ErrorHandlerFunc); ok {
+		return f
+	}
+	return nil
+}
+
+// ===== exceptionMapper context =====
+
+type exceptionMapperKey struct{}
+
+func storeExceptionMapper(r *http.Request, m *plugin.ExceptionMapperPlugin) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), exceptionMapperKey{}, m))
+}
+
+func loadExceptionMapper(r *http.Request) *plugin.ExceptionMapperPlugin {
+	m, _ := r.Context().Value(exceptionMapperKey{}).(*plugin.ExceptionMapperPlugin)
+	return m
+}
+
+// HandleError 將 error 透過 ExceptionMapper 轉成對應的 HTTP 回應。
+// 若沒有符合的規則，回傳 500。
+func HandleError(w http.ResponseWriter, r *http.Request, err error) {
+	if mapper := loadExceptionMapper(r); mapper != nil {
+		if code, msg, ok := mapper.Map(err); ok {
+			Respond(w, r, code, Error(msg))
+			return
+		}
+	}
+	Respond(w, r, http.StatusInternalServerError, Error(err.Error()))
 }

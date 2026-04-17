@@ -11,6 +11,7 @@ type Codec interface {
 // Registrar 是插件安裝時使用的註冊介面，避免直接依賴 Router。
 type Registrar interface {
 	RegisterCodec(mediaType string, c Codec)
+	RegisterExceptionMapper(m *ExceptionMapperPlugin)
 }
 
 // Plugin 是框架插件的統一介面。

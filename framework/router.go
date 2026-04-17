@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/xchwan/simple-web-framework/framework/builtin"
 	"github.com/xchwan/simple-web-framework/framework/plugin"
 	"github.com/xchwan/simple-web-framework/framework/routing"
 	"github.com/xchwan/simple-web-framework/framework/scope"
@@ -19,28 +20,32 @@ func PathParam(r *http.Request, key string) string {
 }
 
 // Router 持有一組 HttpHandler，對每個進來的請求依序嘗試。
-// 當某個 handler 回傳 Handled 後即停止，否則依匹配結果呼叫 errorHandler。
-// Router 實作 http.Handler，可直接傳入 http.ListenAndServe。
 type Router struct {
-	handlers     []routing.HttpHandler
-	errorHandler ErrorHandlerFunc
-	container    *Container
-	codecs       map[string]plugin.Codec
+	handlers        []routing.HttpHandler
+	errorHandler    ErrorHandlerFunc
+	container       *Container
+	codecs          map[string]plugin.Codec
+	exceptionMapper *plugin.ExceptionMapperPlugin
 }
 
 // NewRouter 建立並回傳一個空的 Router，預設使用標準錯誤處理，並內建 JSON 與 text/plain 的 Codec。
 func NewRouter() *Router {
 	r := &Router{
-		errorHandler: defaultErrorHandler,
+		errorHandler: builtin.DefaultErrorHandler,
 		container:    NewContainer(),
 		codecs:       make(map[string]plugin.Codec),
 	}
-	r.RegisterCodec("application/json", &jsonCodec{})
-	r.RegisterCodec("text/plain", &textCodec{})
+	r.RegisterCodec("application/json", &builtin.JsonCodec{})
+	r.RegisterCodec("text/plain", &builtin.TextCodec{})
 	return r
 }
 
-// AddPlugin 安裝一個插件，插件可藉此向 Router 註冊 Codec 等擴充。
+// SetErrorHandler 設定自訂錯誤處理，覆蓋預設行為。
+func (ro *Router) SetErrorHandler(f ErrorHandlerFunc) {
+	ro.errorHandler = f
+}
+
+// AddPlugin 安裝一個插件。
 func (ro *Router) AddPlugin(p plugin.Plugin) {
 	p.Install(ro)
 }
@@ -50,13 +55,12 @@ func (ro *Router) RegisterCodec(mediaType string, c plugin.Codec) {
 	ro.codecs[mediaType] = c
 }
 
-// SetErrorHandler 設定自訂錯誤處理，覆蓋預設行為。
-func (ro *Router) SetErrorHandler(f ErrorHandlerFunc) {
-	ro.errorHandler = f
+// RegisterExceptionMapper 設定 ExceptionMapperPlugin，實作 plugin.Registrar。
+func (ro *Router) RegisterExceptionMapper(m *plugin.ExceptionMapperPlugin) {
+	ro.exceptionMapper = m
 }
 
 // Bind 向容器註冊一個依賴，s 省略時預設使用 SingletonScope。
-// 新增自訂 scope 只需傳入對應的 scope.Scope 實作，不需修改 Router。
 func (ro *Router) Bind(name string, factory func() any, s ...scope.Scope) {
 	ro.container.Register(name, factory, s...)
 }
@@ -102,11 +106,14 @@ func (ro *Router) Run(addr string) error {
 	return http.ListenAndServe(addr, ro)
 }
 
-// ServeHTTP 實作 http.Handler 介面，由 Go 的 HTTP server 在每個請求進來時自動呼叫。
+// ServeHTTP 實作 http.Handler 介面。
 func (ro *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = storeErrorHandler(r, ro.errorHandler)
 	r = scope.InjectRequestScopeStore(r)
 	r = injectCodecs(r, ro.codecs)
+	if ro.exceptionMapper != nil {
+		r = storeExceptionMapper(r, ro.exceptionMapper)
+	}
 	if ro.container != nil {
 		r = injectContainer(r, ro.container)
 	}

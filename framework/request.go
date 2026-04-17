@@ -1,11 +1,9 @@
 package framework
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "net/http"
 
-// ParseRequest 將 request body 的 JSON 解析到 v。
+// ParseRequest 依 Content-Type header 選擇對應的 Codec，將 request body 解析到 v。
 func ParseRequest(r *http.Request, v any) error {
-	return json.NewDecoder(r.Body).Decode(v)
+	_, codec := lookupCodec(r, r.Header.Get("Content-Type"))
+	return codec.Decode(r.Body, v)
 }

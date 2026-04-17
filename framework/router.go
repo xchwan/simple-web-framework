@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/xchwan/simple-web-framework/framework/plugin"
 	"github.com/xchwan/simple-web-framework/framework/routing"
 	"github.com/xchwan/simple-web-framework/framework/scope"
 )
@@ -24,14 +25,29 @@ type Router struct {
 	handlers     []routing.HttpHandler
 	errorHandler ErrorHandlerFunc
 	container    *Container
+	codecs       map[string]plugin.Codec
 }
 
-// NewRouter 建立並回傳一個空的 Router，預設使用標準錯誤處理，並內建一個空的 Container。
+// NewRouter 建立並回傳一個空的 Router，預設使用標準錯誤處理，並內建 JSON 與 text/plain 的 Codec。
 func NewRouter() *Router {
-	return &Router{
+	r := &Router{
 		errorHandler: defaultErrorHandler,
 		container:    NewContainer(),
+		codecs:       make(map[string]plugin.Codec),
 	}
+	r.RegisterCodec("application/json", &jsonCodec{})
+	r.RegisterCodec("text/plain", &textCodec{})
+	return r
+}
+
+// AddPlugin 安裝一個插件，插件可藉此向 Router 註冊 Codec 等擴充。
+func (ro *Router) AddPlugin(p plugin.Plugin) {
+	p.Install(ro)
+}
+
+// RegisterCodec 向 Router 註冊指定 media type 的 Codec，實作 plugin.Registrar。
+func (ro *Router) RegisterCodec(mediaType string, c plugin.Codec) {
+	ro.codecs[mediaType] = c
 }
 
 // SetErrorHandler 設定自訂錯誤處理，覆蓋預設行為。
@@ -90,6 +106,7 @@ func (ro *Router) Run(addr string) error {
 func (ro *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = storeErrorHandler(r, ro.errorHandler)
 	r = scope.InjectRequestScopeStore(r)
+	r = injectCodecs(r, ro.codecs)
 	if ro.container != nil {
 		r = injectContainer(r, ro.container)
 	}

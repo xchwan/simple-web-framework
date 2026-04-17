@@ -1,11 +1,8 @@
 package framework
 
-import (
-	"encoding/json"
-	"net/http"
-)
+import "net/http"
 
-// Respond 是統一的回應入口，將 body 以 JSON 編碼回傳。
+// Respond 依 Content-Type header 選擇對應的 Codec，將 body 序列化後回傳。
 // 204 不設 Content-Type、不帶 body。
 // routing 層的 404/405 由 Router.ServeHTTP 直接呼叫 errorHandler，不走這裡。
 func Respond(w http.ResponseWriter, r *http.Request, statusCode int, body any) {
@@ -13,9 +10,10 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, body any) {
 		w.WriteHeader(statusCode)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	mt, codec := lookupCodec(r, r.Header.Get("Content-Type"))
+	w.Header().Set("Content-Type", mt)
 	w.WriteHeader(statusCode)
 	if body != nil {
-		json.NewEncoder(w).Encode(body)
+		codec.Encode(w, body)
 	}
 }

@@ -1,6 +1,10 @@
 package framework
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/xchwan/simple-web-framework/framework/plugin"
+)
 
 // Respond 依 Content-Type header 選擇對應的 Codec，將 body 序列化後回傳。
 // 204 不設 Content-Type、不帶 body。
@@ -10,10 +14,10 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, body any) {
 		w.WriteHeader(statusCode)
 		return
 	}
-	mt, codec := lookupCodec(r, r.Header.Get("Content-Type"))
+	mt, c := plugin.Lookup(r, r.Header.Get("Content-Type"))
 	w.Header().Set("Content-Type", mt)
 	w.WriteHeader(statusCode)
 	if body != nil {
-		codec.Encode(w, body)
+		c.Encode(w, body)
 	}
 }

@@ -24,7 +24,7 @@ func NewExceptionMapperPlugin() *ExceptionMapperPlugin {
 	return &ExceptionMapperPlugin{rules: make(map[error]exceptionRule)}
 }
 
-// On 新增一條 error → statusCode + message 的對應規則。
+// On 新增一條 error → statusCode + message 的對應規則，支援鏈式呼叫。
 func (p *ExceptionMapperPlugin) On(err error, statusCode int, message string) *ExceptionMapperPlugin {
 	p.rules[err] = exceptionRule{statusCode, message}
 	return p
@@ -33,7 +33,7 @@ func (p *ExceptionMapperPlugin) On(err error, statusCode int, message string) *E
 // Map 查找 error 對應的 status code 與訊息。
 // 先直接查 map（O(1)），找不到再用 errors.Is 處理 wrapped error（O(n)）。
 func (p *ExceptionMapperPlugin) Map(err error) (statusCode int, message string, ok bool) {
-	if rule, ok := p.rules[err]; ok {
+	if rule, found := p.rules[err]; found {
 		return rule.statusCode, rule.message, true
 	}
 	for target, rule := range p.rules {
@@ -44,11 +44,8 @@ func (p *ExceptionMapperPlugin) Map(err error) (statusCode int, message string, 
 	return 0, "", false
 }
 
-// Install 實作 Plugin 介面，ExceptionMapperPlugin 透過 PrepareRequest 自行注入，無需向 Registrar 登記。
-func (p *ExceptionMapperPlugin) Install(_ Registrar) {}
-
-// PrepareRequest 實作 RequestPreparer，將自身注入 request context。
-func (p *ExceptionMapperPlugin) PrepareRequest(r *http.Request) *http.Request {
+// Inject 實作 ContextInjector，將自身注入 request context。
+func (p *ExceptionMapperPlugin) Inject(r *http.Request) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), exceptionMapperKey{}, p))
 }
 

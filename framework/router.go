@@ -35,7 +35,7 @@ func NewRouter() *Router {
 		container:    NewContainer(),
 		plugins:      make(map[reflect.Type]any),
 	}
-	cr := NewCodecRegistry()
+	cr := plugin.NewCodecRegistry()
 	cr.Register("application/json", &builtin.JsonCodec{})
 	cr.Register("text/plain", &builtin.TextCodec{})
 	r.plugins[reflect.TypeOf(cr)] = cr
@@ -48,14 +48,13 @@ func (ro *Router) SetErrorHandler(f ErrorHandlerFunc) {
 }
 
 // AddPlugin 安裝一個插件，以型別為 key 存入 plugins map，同型別只會保留最後一個。
-func (ro *Router) AddPlugin(p plugin.Plugin) {
+// 若 p 實作 Installer，會以當前所有已註冊資源呼叫 Install。
+// 若 p 實作 ContextInjector，每個 request 進來時會自動注入 context。
+func (ro *Router) AddPlugin(p any) {
 	ro.plugins[reflect.TypeOf(p)] = p
-	p.Install(ro)
-}
-
-// RegisterCodec 向內建 CodecRegistry 註冊指定 media type 的 Codec，實作 plugin.Registrar。
-func (ro *Router) RegisterCodec(mediaType string, c plugin.Codec) {
-	ro.plugins[reflect.TypeOf((*CodecRegistry)(nil))].(*CodecRegistry).Register(mediaType, c)
+	if installer, ok := p.(plugin.Installer); ok {
+		installer.Install(plugin.PluginContext(ro.plugins))
+	}
 }
 
 // Bind 向容器註冊一個依賴，s 省略時預設使用 SingletonScope。
@@ -115,8 +114,8 @@ func (ro *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) injectContext(r *http.Request) *http.Request {
 	r = storeErrorHandler(r, ro.errorHandler)
 	for _, p := range ro.plugins {
-		if preparer, ok := p.(plugin.RequestPreparer); ok {
-			r = preparer.PrepareRequest(r)
+		if injector, ok := p.(plugin.ContextInjector); ok {
+			r = injector.Inject(r)
 		}
 	}
 	if ro.container != nil {

@@ -3,21 +3,20 @@ package plugin
 import (
 	"encoding/xml"
 	"io"
+	"reflect"
 )
 
-// XmlMediaTypePlugin 提供 application/xml 的序列化/反序列化支援。
-type XmlMediaTypePlugin struct{}
+// XmlCodec 提供 application/xml 的序列化/反序列化支援。
+type XmlCodec struct{}
 
-func (p *XmlMediaTypePlugin) Install(r Registrar) {
-	r.RegisterCodec("application/xml", &xmlCodec{})
+func (c *XmlCodec) Install(ctx PluginContext) {
+	ctx[reflect.TypeOf((*CodecRegistry)(nil))].(*CodecRegistry).Register("application/xml", c)
 }
 
-type xmlCodec struct{}
-
-func (c *xmlCodec) Encode(w io.Writer, v any) error {
+func (c *XmlCodec) Encode(w io.Writer, v any) error {
 	return xml.NewEncoder(w).Encode(v)
 }
 
-func (c *xmlCodec) Decode(r io.Reader, v any) error {
+func (c *XmlCodec) Decode(r io.Reader, v any) error {
 	return xml.NewDecoder(r).Decode(v)
 }

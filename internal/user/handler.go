@@ -57,16 +57,13 @@ type loginResponse struct {
 // Register 處理 POST /api/users。
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req registerRequest
-	if err := framework.ParseRequest(r, &req); err != nil {
-		framework.HandleError(w, r, ErrRegisterFormatInvalid)
-		return
-	}
+	framework.ParseRequest(r, &req)
 	u, err := h.service(r).Register(req.Email, req.Name, req.Password)
 	if err != nil {
 		framework.HandleError(w, r, err)
 		return
 	}
-	framework.Respond(w, r, http.StatusOK, userResponse{
+	framework.Respond(w, r, http.StatusCreated, userResponse{
 		ID:    u.ID,
 		Email: u.Email,
 		Name:  u.Name,
@@ -76,8 +73,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 // Login 處理 POST /api/users/login。
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
-	if err := framework.ParseRequest(r, &req); err != nil {
-		framework.HandleError(w, r, ErrLoginFormatInvalid)
+	if err := framework.ParseOrRespond(w, r, &req); err != nil {
 		return
 	}
 	u, err := h.service(r).Login(req.Email, req.Password)
@@ -109,8 +105,7 @@ func (h *UserHandler) UpdateName(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req renameRequest
-	if err := framework.ParseRequest(r, &req); err != nil {
-		framework.HandleError(w, r, ErrNameFormatInvalid)
+	if err := framework.ParseOrRespond(w, r, &req); err != nil {
 		return
 	}
 

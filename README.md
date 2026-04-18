@@ -92,22 +92,34 @@ r.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
 
 ## 📥 Request 解析
 
-`framework.ParseRequest` 依 `Content-Type` header 自動選擇對應的 Codec 反序列化 request body。
+框架提供兩種 parse 方式，依 `Content-Type` header 自動選擇 Codec。
+
+### ParseRequest — 手動處理 error
+
+decode 失敗時回傳 error，由呼叫方自行決定如何回應。
 
 ```go
-type CreateUserRequest struct {
-    Email    string `json:"email"`
-    Name     string `json:"name"`
-    Password string `json:"password"`
-}
-
 r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
     var body CreateUserRequest
     if err := framework.ParseRequest(req, &body); err != nil {
         framework.HandleError(w, req, err)
         return
     }
-    // use body.Email, body.Name, body.Password ...
+    // use body ...
+})
+```
+
+### ParseOrRespond — 自動處理 error
+
+decode 失敗時自動呼叫 `HandleError`（走 ExceptionMapper → `ErrBadRequest` 預設 400 → fallback 500），handler 只需判斷是否 `return`。
+
+```go
+r.POST("/api/users/login", func(w http.ResponseWriter, req *http.Request) {
+    var body LoginRequest
+    if err := framework.ParseOrRespond(w, req, &body); err != nil {
+        return  // 回應已由框架寫入，只需停止執行
+    }
+    // use body ...
 })
 ```
 
@@ -117,7 +129,7 @@ r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
 
 ## 📤 Response 序列化
 
-`framework.Respond` 依 `Content-Type` header 自動選擇 Codec 序列化並設定對應的 response header。
+`framework.Respond` 依 `Accept` header 自動選擇 Codec 序列化並設定對應的 response header。
 
 ```go
 // 200 OK with JSON body
@@ -143,19 +155,37 @@ framework.Respond(w, r, http.StatusBadRequest, framework.Error("something went w
 
 ### HandleError — 把 Go error 轉成 HTTP 回應
 
-若有安裝 `ExceptionMapperPlugin`，`HandleError` 會查表轉換成對應的 HTTP status code 與訊息；找不到規則時回傳 500。
+依序嘗試以下三層：
+
+1. ⚡ **ExceptionMapperPlugin 自訂規則** — 先查 pointer equality（O(1)），再以 `errors.Is` 遍歷 wrapped error
+2. 🛡️ **Framework 預設 mapping** — `framework.ErrBadRequest` → 400 Bad Request（不需要額外設定）
+3. 🔥 **Fallback** — 回傳 500 Internal Server Error
 
 ```go
 r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
     if err := userService.Register(body.Email, body.Name, body.Password); err != nil {
-        framework.HandleError(w, req, err)   // 自動轉換 err -> HTTP status
+        framework.HandleError(w, req, err)   // 自動轉換 err → HTTP status
         return
     }
     framework.Respond(w, req, http.StatusCreated, nil)
 })
 ```
 
-### 🗂️ ExceptionMapperPlugin — 定義錯誤映射規則
+### 🛡️ ErrBadRequest — Framework 預設 sentinel
+
+`framework.ErrBadRequest` 是框架層定義的 sentinel error，代表 request 格式錯誤。
+`HandleError` 遇到它會自動回應 400，**不需要在 ExceptionMapperPlugin 額外設定**。
+
+`ParseOrRespond` 在 decode 失敗時就會回傳 `ErrBadRequest`，也可以手動使用：
+
+```go
+if someFormatInvalid {
+    framework.HandleError(w, r, framework.ErrBadRequest)
+    return
+}
+```
+
+### 🗂️ ExceptionMapperPlugin — 定義業務錯誤映射規則
 
 在組裝路由時安裝插件，一次定義所有業務錯誤的 HTTP 對應。
 
@@ -164,16 +194,12 @@ import "github.com/xchwan/simple-web-framework/framework/plugin"
 
 router.AddPlugin(
     plugin.NewExceptionMapperPlugin().
-        On(ErrEmailDuplicate,        http.StatusBadRequest,   "Duplicate email").
-        On(ErrCredentialsInvalid,    http.StatusBadRequest,   "Credentials invalid").
-        On(ErrTokenInvalid,          http.StatusUnauthorized, "Can't authenticate who you are.").
-        On(ErrForbidden,             http.StatusForbidden,    "Forbidden"),
+        On(ErrEmailDuplicate,     http.StatusBadRequest,   "Duplicate email").
+        On(ErrCredentialsInvalid, http.StatusBadRequest,   "Credentials invalid").
+        On(ErrTokenInvalid,       http.StatusUnauthorized, "Can't authenticate who you are.").
+        On(ErrForbidden,          http.StatusForbidden,    "Forbidden"),
 )
 ```
-
-呼叫 `HandleError` 時的查找策略：
-1. ⚡ 直接比對 error（pointer equality，O(1)）
-2. 🔄 找不到時以 `errors.Is` 遍歷，支援 wrapped error
 
 ### 🎨 自訂預設錯誤處理器
 
@@ -206,7 +232,7 @@ router.Bind("userRepo", func() any {
 
 // 🌐 明確指定 scope
 router.Bind("userService", func() any {
-    repo := framework.Get[*UserRepository](r, "userRepo")
+    repo := router.Resolve("userRepo").(*UserRepository)
     return NewUserService(repo)
 }, scope.NewHttpRequestScope())
 ```
@@ -228,14 +254,11 @@ r.GET("/api/users", func(w http.ResponseWriter, req *http.Request) {
 `router.Resolve` 可在路由組裝階段（非 request 期間）取出 Singleton 依賴，用來初始化 handler。
 
 ```go
-router.Bind("userRepo", func() any { return NewUserRepository() })
-router.Bind("userHandler", func() any {
-    repo := router.Resolve("userRepo").(*UserRepository)
-    return NewUserHandler(repo)
-})
+router.Bind("userRepo",    func() any { return NewUserRepository() })
+router.Bind("userHandler", func() any { return NewUserHandler() })
 
-handler := router.Resolve("userHandler").(*UserHandler)
-router.GET("/api/users", handler.List)
+h := router.Resolve("userHandler").(*UserHandler)
+router.GET("/api/users", h.List)
 ```
 
 ---
@@ -266,17 +289,21 @@ router.Bind("tempBuffer", func() any {
 
 ## 🔌 Plugin 系統
 
-Plugin 實作 `plugin.Plugin` 介面的 `Install` 方法，在安裝時向框架注冊能力（例如 Codec）。若需要在每個 request 注入 context，可額外實作 `plugin.RequestPreparer`。
+Plugin 透過兩個介面擴充框架能力：
 
 ```go
-type Plugin interface {
-    Install(r Registrar)
+// Installer 在 AddPlugin 時執行一次，用於安裝期初始化（例如向 CodecRegistry 註冊 codec）。
+type Installer interface {
+    Install(ctx PluginContext)
 }
 
-type RequestPreparer interface {
-    PrepareRequest(r *http.Request) *http.Request
+// ContextInjector 在每個 request 進來時執行，將資料注入 request context。
+type ContextInjector interface {
+    Inject(r *http.Request) *http.Request
 }
 ```
+
+一個 plugin 可以只實作其中一個，也可以兩個都實作。
 
 ### 安裝 Plugin
 
@@ -284,61 +311,71 @@ type RequestPreparer interface {
 router.AddPlugin(myPlugin)
 ```
 
-框架在每次請求進來時，會自動呼叫所有實作 `RequestPreparer` 的 plugin 的 `PrepareRequest`，讓 plugin 有機會向 context 注入資料。
+- 若 plugin 實作 `Installer` → 立即執行 `Install`，並傳入目前所有已註冊資源（`PluginContext`）
+- 若 plugin 實作 `ContextInjector` → 每個 request 進來時自動呼叫 `Inject`
+
+### PluginContext — Plugin 之間的溝通橋樑
+
+`PluginContext` 是一個以型別為 key 的 map，`Install` 時可以從中取出其他已安裝的資源。
+這讓 plugin 之間可以互相協作，而 Router 不需要知道任何具體型別。
+
+```go
+// XmlCodec 在 Install 時向 CodecRegistry 註冊自己
+func (c *XmlCodec) Install(ctx plugin.PluginContext) {
+    ctx[reflect.TypeOf((*plugin.CodecRegistry)(nil))].(*plugin.CodecRegistry).Register("application/xml", c)
+}
+```
 
 ### 📦 內建 Plugin
 
-| Plugin | 功能 | 預設 |
-|--------|------|------|
-| `CodecRegistry` | JSON + text/plain 序列化 | ✅ 自動安裝 |
-| `ExceptionMapperPlugin` | error → HTTP status 映射 | 🔧 手動安裝 |
-| `XmlMediaTypePlugin` | application/xml 支援 | 🔧 手動安裝 |
+| Plugin | 介面 | 功能 | 預設 |
+|--------|------|------|------|
+| `CodecRegistry` | `ContextInjector` | JSON + text/plain 序列化，每個 request 注入 context | ✅ 自動安裝 |
+| `ExceptionMapperPlugin` | `ContextInjector` | error → HTTP status 映射，每個 request 注入 context | 🔧 手動安裝 |
+| `XmlCodec` | `Installer` | 向 CodecRegistry 註冊 application/xml 支援 | 🔧 手動安裝 |
 
 ---
 
 ## 🗜️ Codec 擴充
 
-### 新增 Media Type 實作
-
-若只是要替換或新增 codec，用 `router.RegisterCodec` 直接注冊：
-
-```go
-router.RegisterCodec("application/msgpack", &MsgpackCodec{})
-```
-
-### 透過 Plugin 新增 Media Type
-
-實作 `plugin.Plugin` 介面，在 `Install` 時呼叫 `Registrar.RegisterCodec`：
-
-```go
-type MsgpackPlugin struct{}
-
-func (p *MsgpackPlugin) Install(r plugin.Registrar) {
-    r.RegisterCodec("application/msgpack", &msgpackCodec{})
-}
-
-type msgpackCodec struct{}
-
-func (c *msgpackCodec) Encode(w io.Writer, v any) error {
-    return msgpack.NewEncoder(w).Encode(v)
-}
-
-func (c *msgpackCodec) Decode(r io.Reader, v any) error {
-    return msgpack.NewDecoder(r).Decode(v)
-}
-
-// 安裝
-router.AddPlugin(&MsgpackPlugin{})
-```
-
 ### 🗂️ 啟用 XML 支援
 
-框架內建 `XmlMediaTypePlugin`，安裝後即可處理 `application/xml` 請求與回應。
+框架內建 `XmlCodec`，安裝後即可處理 `application/xml` 請求與回應。
 
 ```go
 import "github.com/xchwan/simple-web-framework/framework/plugin"
 
-router.AddPlugin(&plugin.XmlMediaTypePlugin{})
+router.AddPlugin(&plugin.XmlCodec{})
+```
+
+### 新增自訂 Media Type
+
+實作 `plugin.Codec` 介面，再透過 `Installer` 向 `CodecRegistry` 註冊：
+
+```go
+import (
+    "io"
+    "reflect"
+    "github.com/xchwan/simple-web-framework/framework/plugin"
+)
+
+type MsgpackCodec struct{}
+
+func (c *MsgpackCodec) Install(ctx plugin.PluginContext) {
+    ctx[reflect.TypeOf((*plugin.CodecRegistry)(nil))].(*plugin.CodecRegistry).
+        Register("application/msgpack", c)
+}
+
+func (c *MsgpackCodec) Encode(w io.Writer, v any) error {
+    return msgpack.NewEncoder(w).Encode(v)
+}
+
+func (c *MsgpackCodec) Decode(r io.Reader, v any) error {
+    return msgpack.NewDecoder(r).Decode(v)
+}
+
+// 安裝
+router.AddPlugin(&MsgpackCodec{})
 ```
 
 ---
@@ -352,49 +389,52 @@ router.AddPlugin(&plugin.XmlMediaTypePlugin{})
 ```go
 // internal/user/errors.go
 var (
-    ErrEmailDuplicate         = errors.New("email duplicate")
-    ErrRegisterFormatInvalid  = errors.New("register format invalid")
-    ErrCredentialsInvalid     = errors.New("credentials invalid")
-    ErrLoginFormatInvalid     = errors.New("login format invalid")
-    ErrTokenInvalid           = errors.New("token invalid")
-    ErrForbidden              = errors.New("forbidden")
-    ErrNameFormatInvalid      = errors.New("name format invalid")
+    ErrEmailDuplicate        = errors.New("email duplicate")
+    ErrRegisterFormatInvalid = errors.New("register format invalid")
+    ErrCredentialsInvalid    = errors.New("credentials invalid")
+    ErrLoginFormatInvalid    = errors.New("login format invalid")
+    ErrTokenInvalid          = errors.New("token invalid")
+    ErrForbidden             = errors.New("forbidden")
+    ErrNameFormatInvalid     = errors.New("name format invalid")
 )
 ```
 
 ### 2. ✍️ 撰寫 Handler
 
+Handler 透過 `framework.Get[T]` 從 container 取得 service，不持有任何依賴。
+
 ```go
 // internal/user/handler.go
-type UserHandler struct {
-    service *UserService
+type UserHandler struct{}
+
+func (h *UserHandler) service(r *http.Request) *UserService {
+    return framework.Get[*UserService](r, "userService")
 }
 
+// Register：body 格式錯誤時讓 service 驗證並回傳 domain error（手動流）
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
     var req registerRequest
-    if err := framework.ParseRequest(r, &req); err != nil {
-        framework.HandleError(w, r, ErrRegisterFormatInvalid)
-        return
-    }
-    if err := h.service.Register(req.Email, req.Name, req.Password); err != nil {
-        framework.HandleError(w, r, err)
-        return
-    }
-    framework.Respond(w, r, http.StatusCreated, nil)
-}
-
-func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-    var req loginRequest
-    if err := framework.ParseRequest(r, &req); err != nil {
-        framework.HandleError(w, r, ErrLoginFormatInvalid)
-        return
-    }
-    token, err := h.service.Login(req.Email, req.Password)
+    framework.ParseRequest(r, &req)  // error 由 service 驗證攔截
+    u, err := h.service(r).Register(req.Email, req.Name, req.Password)
     if err != nil {
         framework.HandleError(w, r, err)
         return
     }
-    framework.Respond(w, r, http.StatusOK, loginResponse{Token: token})
+    framework.Respond(w, r, http.StatusCreated, userResponse{ID: u.ID, Email: u.Email, Name: u.Name})
+}
+
+// Login：body 格式錯誤直接 400，不進 service（自動流）
+func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+    var req loginRequest
+    if err := framework.ParseOrRespond(w, r, &req); err != nil {
+        return
+    }
+    u, err := h.service(r).Login(req.Email, req.Password)
+    if err != nil {
+        framework.HandleError(w, r, err)
+        return
+    }
+    framework.Respond(w, r, http.StatusOK, loginResponse{ID: u.ID, Email: u.Email, Name: u.Name, Token: u.Token})
 }
 ```
 
@@ -402,8 +442,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 ```go
 // internal/user/register.go
-func RegisterRoutes(router *framework.Router) {
-    // 安裝錯誤映射插件
+func Register(router *framework.Router) {
     router.AddPlugin(
         plugin.NewExceptionMapperPlugin().
             On(ErrEmailDuplicate,        http.StatusBadRequest,   "Duplicate email").
@@ -415,20 +454,13 @@ func RegisterRoutes(router *framework.Router) {
             On(ErrNameFormatInvalid,     http.StatusBadRequest,   "Name's format invalid."),
     )
 
-    // 注冊依賴
     router.Bind("userRepo", func() any { return NewUserRepository() })
-
     router.Bind("userService", func() any {
         repo := router.Resolve("userRepo").(*UserRepository)
         return NewUserService(repo)
     }, scope.NewHttpRequestScope())
+    router.Bind("userHandler", func() any { return NewUserHandler() })
 
-    router.Bind("userHandler", func() any {
-        repo := router.Resolve("userRepo").(*UserRepository)
-        return NewUserHandler(NewUserService(repo))
-    })
-
-    // 注冊路由
     h := router.Resolve("userHandler").(*UserHandler)
     router.POST("/api/users",           h.Register)
     router.POST("/api/users/login",     h.Login)
@@ -443,7 +475,7 @@ func RegisterRoutes(router *framework.Router) {
 // cmd/main/main.go
 func main() {
     r := framework.NewRouter()
-    user.RegisterRoutes(r)
+    user.Register(r)
     r.Run(":8080")
 }
 ```

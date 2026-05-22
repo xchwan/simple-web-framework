@@ -39,6 +39,6 @@ coverage.txt
 .gocache/
 
 # === Claude Code ===
-.claude/
+# settings.local.json is for personal overrides — keep it local
+.claude/settings.local.json
 memory/
-CLAUDE.md

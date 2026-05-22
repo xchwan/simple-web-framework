@@ -1,33 +1,39 @@
 # 🕸️ Simple Web Framework
 
-以 Go 標準函式庫為基礎打造的輕量 HTTP 框架，示範如何用 **IoC Container**、**Plugin 系統**、**Codec Registry** 等設計模式實作一個可擴充的 Web 框架。
+A lightweight HTTP framework built on top of Go's standard library, demonstrating how to implement an extensible web framework using **IoC Container**, **Plugin System**, and **Codec Registry** design patterns.
+
+```bash
+go get github.com/xchwan/simple-web-framework
+```
 
 ---
 
-## 📋 目錄
+## 📋 Table of Contents
 
-- [🚀 快速開始](#-快速開始)
-- [🗺️ 路由](#️-路由)
-- [📥 Request 解析](#-request-解析)
-- [📤 Response 序列化](#-response-序列化)
-- [🚨 錯誤處理](#-錯誤處理)
-- [🧩 IoC Container 與依賴注入](#-ioc-container-與依賴注入)
-- [♻️ Scope（生命週期）](#️-scope生命週期)
-- [🔌 Plugin 系統](#-plugin-系統)
-- [🗜️ Codec 擴充](#️-codec-擴充)
-- [📦 完整範例](#-完整範例)
-- [🛠️ 開發指令](#️-開發指令)
+- [🚀 Quick Start](#-quick-start)
+- [🗺️ Routing](#️-routing)
+- [📥 Request Parsing](#-request-parsing)
+- [📤 Response Serialization](#-response-serialization)
+- [🚨 Error Handling](#-error-handling)
+- [🧩 IoC Container & Dependency Injection](#-ioc-container--dependency-injection)
+- [♻️ Scopes (Lifecycle)](#️-scopes-lifecycle)
+- [🔌 Plugin System](#-plugin-system)
+- [🗜️ Codec Extension](#️-codec-extension)
+- [📦 Full Example](#-full-example)
+- [🛠️ Development Commands](#️-development-commands)
+- [👤 Author](#-author)
 
 ---
 
-## 🚀 快速開始
+## 🚀 Quick Start
 
 ```go
 package main
 
 import (
     "net/http"
-    "github.com/xchwan/simple-web-framework"
+
+    framework "github.com/xchwan/simple-web-framework"
 )
 
 func main() {
@@ -43,11 +49,11 @@ func main() {
 
 ---
 
-## 🗺️ 路由
+## 🗺️ Routing
 
-### 基本路由
+### Basic Routes
 
-支援 `GET`、`POST`、`PUT`、`DELETE`、`PATCH` 五種 HTTP 方法。
+Supports `GET`, `POST`, `PUT`, `DELETE`, and `PATCH` HTTP methods.
 
 ```go
 r := framework.NewRouter()
@@ -61,18 +67,18 @@ r.DELETE("/api/users/{id}", deleteUser)
 
 ### 🔖 Path Parameters
 
-在路徑中以 `{name}` 宣告路徑參數，再用 `framework.PathParam` 取出。
+Declare path parameters using `{name}` syntax and retrieve them with `framework.PathParam`.
 
 ```go
 r.GET("/api/users/{userId}", func(w http.ResponseWriter, r *http.Request) {
     id := framework.PathParam(r, "userId")
-    // id == "42" (when request path is /api/users/42)
+    // id == "42" when the request path is /api/users/42
 })
 ```
 
 ### 🔍 Query Parameters
 
-直接使用標準函式庫取出 query string。
+Use the standard library directly to extract query strings.
 
 ```go
 r.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
@@ -81,22 +87,22 @@ r.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
-### ⚠️ 路由找不到時的行為
+### ⚠️ Routing Error Behavior
 
-| 狀況 | HTTP 狀態碼 |
-|------|------------|
-| 路徑不存在 | 404 Not Found |
-| 路徑存在但方法不符 | 405 Method Not Allowed |
+| Scenario | HTTP Status Code |
+|----------|-----------------|
+| Path not found | 404 Not Found |
+| Path matched but method not allowed | 405 Method Not Allowed |
 
 ---
 
-## 📥 Request 解析
+## 📥 Request Parsing
 
-框架提供兩種 parse 方式，依 `Content-Type` header 自動選擇 Codec。
+The framework provides two parsing functions that automatically select a Codec based on the `Content-Type` header.
 
-### ParseRequest — 手動處理 error
+### ParseRequest — Manual Error Handling
 
-decode 失敗時回傳 error，由呼叫方自行決定如何回應。
+Returns the error on decode failure; the caller decides how to respond.
 
 ```go
 r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
@@ -109,27 +115,27 @@ r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
 })
 ```
 
-### ParseOrRespond — 自動處理 error
+### ParseOrRespond — Automatic Error Handling
 
-decode 失敗時自動呼叫 `HandleError`（走 ExceptionMapper → `ErrBadRequest` 預設 400 → fallback 500），handler 只需判斷是否 `return`。
+On decode failure, automatically calls `HandleError` (ExceptionMapper → `ErrBadRequest` default 400 → fallback 500). The handler only needs to check whether to `return`.
 
 ```go
 r.POST("/api/users/login", func(w http.ResponseWriter, req *http.Request) {
     var body LoginRequest
     if err := framework.ParseOrRespond(w, req, &body); err != nil {
-        return  // 回應已由框架寫入，只需停止執行
+        return  // response already written by the framework
     }
     // use body ...
 })
 ```
 
-預設支援 `application/json` 與 `text/plain`（見 [🗜️ Codec 擴充](#️-codec-擴充)）。
+Supported out of the box: `application/json` and `text/plain` (see [🗜️ Codec Extension](#️-codec-extension)).
 
 ---
 
-## 📤 Response 序列化
+## 📤 Response Serialization
 
-`framework.Respond` 依 `Accept` header 自動選擇 Codec 序列化並設定對應的 response header。
+`framework.Respond` automatically selects a Codec based on the `Accept` header, serializes the body, and sets the appropriate response headers.
 
 ```go
 // 200 OK with JSON body
@@ -138,11 +144,11 @@ framework.Respond(w, r, http.StatusOK, body)
 // 201 Created
 framework.Respond(w, r, http.StatusCreated, body)
 
-// 204 No Content（不輸出 body）
+// 204 No Content (no body written)
 framework.Respond(w, r, http.StatusNoContent, nil)
 ```
 
-**錯誤回應格式**：框架統一使用 `framework.ErrorBody` 作為錯誤的 JSON 結構。
+**Error response format**: The framework uses `framework.ErrorBody` as the unified JSON error structure.
 
 ```go
 // {"message": "something went wrong"}
@@ -151,32 +157,31 @@ framework.Respond(w, r, http.StatusBadRequest, framework.Error("something went w
 
 ---
 
-## 🚨 錯誤處理
+## 🚨 Error Handling
 
-### HandleError — 把 Go error 轉成 HTTP 回應
+### HandleError — Convert Go Errors to HTTP Responses
 
-依序嘗試以下三層：
+Tries the following three layers in order:
 
-1. ⚡ **ExceptionMapperPlugin 自訂規則** — 先查 pointer equality（O(1)），再以 `errors.Is` 遍歷 wrapped error
-2. 🛡️ **Framework 預設 mapping** — `framework.ErrBadRequest` → 400 Bad Request（不需要額外設定）
-3. 🔥 **Fallback** — 回傳 500 Internal Server Error
+1. ⚡ **ExceptionMapperPlugin custom rules** — pointer equality first (O(1)), then `errors.Is` traversal for wrapped errors
+2. 🛡️ **Framework defaults** — `framework.ErrBadRequest` → 400 Bad Request (no extra setup needed)
+3. 🔥 **Fallback** — 500 Internal Server Error
 
 ```go
 r.POST("/api/users", func(w http.ResponseWriter, req *http.Request) {
     if err := userService.Register(body.Email, body.Name, body.Password); err != nil {
-        framework.HandleError(w, req, err)   // 自動轉換 err → HTTP status
+        framework.HandleError(w, req, err)  // automatically maps err → HTTP status
         return
     }
     framework.Respond(w, req, http.StatusCreated, nil)
 })
 ```
 
-### 🛡️ ErrBadRequest — Framework 預設 sentinel
+### 🛡️ ErrBadRequest — Framework Default Sentinel
 
-`framework.ErrBadRequest` 是框架層定義的 sentinel error，代表 request 格式錯誤。
-`HandleError` 遇到它會自動回應 400，**不需要在 ExceptionMapperPlugin 額外設定**。
+`framework.ErrBadRequest` is a framework-level sentinel representing a malformed request (e.g., JSON parse failure). `HandleError` automatically responds with 400 when it encounters this error — **no ExceptionMapperPlugin configuration required**.
 
-`ParseOrRespond` 在 decode 失敗時就會回傳 `ErrBadRequest`，也可以手動使用：
+`ParseOrRespond` returns `ErrBadRequest` on decode failure. You can also use it directly:
 
 ```go
 if someFormatInvalid {
@@ -185,9 +190,9 @@ if someFormatInvalid {
 }
 ```
 
-### 🗂️ ExceptionMapperPlugin — 定義業務錯誤映射規則
+### 🗂️ ExceptionMapperPlugin — Define Business Error Mappings
 
-在組裝路由時安裝插件，一次定義所有業務錯誤的 HTTP 對應。
+Install the plugin during router setup to map all domain errors to HTTP status codes in one place.
 
 ```go
 import "github.com/xchwan/simple-web-framework/plugin"
@@ -201,9 +206,9 @@ router.AddPlugin(
 )
 ```
 
-### 🎨 自訂預設錯誤處理器
+### 🎨 Custom Default Error Handler
 
-覆蓋路由層（404 / 405）的預設回應格式。
+Override the default response format for routing-layer errors (404 / 405).
 
 ```go
 router.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, statusCode int) {
@@ -218,28 +223,28 @@ router.SetErrorHandler(func(w http.ResponseWriter, r *http.Request, statusCode i
 
 ---
 
-## 🧩 IoC Container 與依賴注入
+## 🧩 IoC Container & Dependency Injection
 
-### 注冊依賴
+### Registering Dependencies
 
-用 `router.Bind` 向容器注冊，省略 scope 時預設為 Singleton。
+Use `router.Bind` to register with the container. Defaults to `SingletonScope` when no scope is provided.
 
 ```go
-// 🔒 Singleton（整個應用程式共用同一個 instance）
+// 🔒 Singleton — one instance shared across the entire application
 router.Bind("userRepo", func() any {
     return NewUserRepository()
 })
 
-// 🌐 明確指定 scope
+// 🌐 Explicit scope
 router.Bind("userService", func() any {
     repo := router.Resolve("userRepo").(*UserRepository)
     return NewUserService(repo)
 }, scope.NewHttpRequestScope())
 ```
 
-### 在 Handler 中取出依賴
+### Resolving Dependencies in Handlers
 
-使用 `framework.Get[T]` 泛型函式，型別安全地取出依賴。
+Use `framework.Get[T]` — a type-safe generic function — to retrieve dependencies from the request context.
 
 ```go
 r.GET("/api/users", func(w http.ResponseWriter, req *http.Request) {
@@ -249,9 +254,9 @@ r.GET("/api/users", func(w http.ResponseWriter, req *http.Request) {
 })
 ```
 
-### 🏗️ 啟動時解析依賴
+### 🏗️ Resolving at Startup
 
-`router.Resolve` 可在路由組裝階段（非 request 期間）取出 Singleton 依賴，用來初始化 handler。
+`router.Resolve` can retrieve Singleton dependencies during router setup (outside of a request) to wire up handlers at startup.
 
 ```go
 router.Bind("userRepo",    func() any { return NewUserRepository() })
@@ -263,23 +268,23 @@ router.GET("/api/users", h.List)
 
 ---
 
-## ♻️ Scope（生命週期）
+## ♻️ Scopes (Lifecycle)
 
-| Scope | 說明 | 建立方式 |
-|-------|------|----------|
-| 🔒 `SingletonScope`（預設）| 整個應用程式只建立一次 | `scope.NewSingletonScope()` |
-| 🆕 `PrototypeScope` | 每次 `Resolve` 都建立新 instance | `scope.NewPrototypeScope()` |
-| 🌐 `HttpRequestScope` | 同一個 HTTP request 內共用同一個 instance | `scope.NewHttpRequestScope()` |
+| Scope | Description | Constructor |
+|-------|-------------|-------------|
+| 🔒 `SingletonScope` (default) | One instance for the entire application | `scope.NewSingletonScope()` |
+| 🆕 `PrototypeScope` | New instance on every `Resolve` call | `scope.NewPrototypeScope()` |
+| 🌐 `HttpRequestScope` | One instance shared within a single HTTP request | `scope.NewHttpRequestScope()` |
 
 ```go
 import "github.com/xchwan/simple-web-framework/scope"
 
-// 每個 request 共享同一個 service instance
+// Share one service instance per request
 router.Bind("userService", func() any {
     return NewUserService()
 }, scope.NewHttpRequestScope())
 
-// 每次取都是全新的
+// Fresh instance on every resolve
 router.Bind("tempBuffer", func() any {
     return &bytes.Buffer{}
 }, scope.NewPrototypeScope())
@@ -287,60 +292,61 @@ router.Bind("tempBuffer", func() any {
 
 ---
 
-## 🔌 Plugin 系統
+## 🔌 Plugin System
 
-Plugin 透過兩個介面擴充框架能力：
+Plugins extend the framework through two focused interfaces:
 
 ```go
-// Installer 在 AddPlugin 時執行一次，用於安裝期初始化（例如向 CodecRegistry 註冊 codec）。
+// Installer is called once when AddPlugin is invoked — for startup initialization
+// (e.g., registering a codec into CodecRegistry).
 type Installer interface {
     Install(ctx PluginContext)
 }
 
-// ContextInjector 在每個 request 進來時執行，將資料注入 request context。
+// ContextInjector is called on every incoming request to inject data into the request context.
 type ContextInjector interface {
     Inject(r *http.Request) *http.Request
 }
 ```
 
-一個 plugin 可以只實作其中一個，也可以兩個都實作。
+A plugin can implement one or both interfaces.
 
-### 安裝 Plugin
+### Installing a Plugin
 
 ```go
 router.AddPlugin(myPlugin)
 ```
 
-- 若 plugin 實作 `Installer` → 立即執行 `Install`，並傳入目前所有已註冊資源（`PluginContext`）
-- 若 plugin 實作 `ContextInjector` → 每個 request 進來時自動呼叫 `Inject`
+- If the plugin implements `Installer` → `Install` is called immediately with the current `PluginContext`
+- If the plugin implements `ContextInjector` → `Inject` is called automatically on every request
 
-### PluginContext — Plugin 之間的溝通橋樑
+### PluginContext — Bridge Between Plugins
 
-`PluginContext` 是一個以型別為 key 的 map，`Install` 時可以從中取出其他已安裝的資源。
-這讓 plugin 之間可以互相協作，而 Router 不需要知道任何具體型別。
+`PluginContext` is a `map[reflect.Type]any` passed to `Install`, giving each plugin access to all currently registered resources. This allows plugins to collaborate without the Router knowing about concrete types.
 
 ```go
-// XmlCodec 在 Install 時向 CodecRegistry 註冊自己
+// XmlCodec registers itself into CodecRegistry during Install
 func (c *XmlCodec) Install(ctx plugin.PluginContext) {
-    ctx[reflect.TypeOf((*plugin.CodecRegistry)(nil))].(*plugin.CodecRegistry).Register("application/xml", c)
+    ctx[reflect.TypeOf((*plugin.CodecRegistry)(nil))].(*plugin.CodecRegistry).
+        Register("application/xml", c)
 }
 ```
 
-### 📦 內建 Plugin
+### 📦 Built-in Plugins
 
-| Plugin | 介面 | 功能 | 預設 |
-|--------|------|------|------|
-| `CodecRegistry` | `ContextInjector` | JSON + text/plain 序列化，每個 request 注入 context | ✅ 自動安裝 |
-| `ExceptionMapperPlugin` | `ContextInjector` | error → HTTP status 映射，每個 request 注入 context | 🔧 手動安裝 |
-| `XmlCodec` | `Installer` | 向 CodecRegistry 註冊 application/xml 支援 | 🔧 手動安裝 |
+| Plugin | Interface | Function | Default |
+|--------|-----------|----------|---------|
+| `CodecRegistry` | `ContextInjector` | JSON + text/plain serialization, injected per request | ✅ Auto-installed |
+| `ExceptionMapperPlugin` | `ContextInjector` | Maps errors to HTTP status codes, injected per request | 🔧 Manual |
+| `XmlCodec` | `Installer` | Registers `application/xml` support into CodecRegistry | 🔧 Manual |
 
 ---
 
-## 🗜️ Codec 擴充
+## 🗜️ Codec Extension
 
-### 🗂️ 啟用 XML 支援
+### 🗂️ Enable XML Support
 
-框架內建 `XmlCodec`，安裝後即可處理 `application/xml` 請求與回應。
+The framework ships with a built-in `XmlCodec`. Install it to handle `application/xml` requests and responses.
 
 ```go
 import "github.com/xchwan/simple-web-framework/plugin"
@@ -348,14 +354,15 @@ import "github.com/xchwan/simple-web-framework/plugin"
 router.AddPlugin(&plugin.XmlCodec{})
 ```
 
-### 新增自訂 Media Type
+### Adding a Custom Media Type
 
-實作 `plugin.Codec` 介面，再透過 `Installer` 向 `CodecRegistry` 註冊：
+Implement `plugin.Codec` and register it via `Installer`:
 
 ```go
 import (
     "io"
     "reflect"
+
     "github.com/xchwan/simple-web-framework/plugin"
 )
 
@@ -374,20 +381,19 @@ func (c *MsgpackCodec) Decode(r io.Reader, v any) error {
     return msgpack.NewDecoder(r).Decode(v)
 }
 
-// 安裝
+// Install
 router.AddPlugin(&MsgpackCodec{})
 ```
 
 ---
 
-## 📦 完整範例
+## 📦 Full Example
 
-以下為 `internal/user` 的完整組裝流程，展示框架各功能的協作方式。
+The following shows the complete wiring flow from [`simple-web-app`](https://github.com/xchwan/simple-web-app) — a demo user service built on top of this framework.
 
-### 1. 🐛 定義 Domain Errors
+### 1. 🐛 Define Domain Errors
 
 ```go
-// internal/user/errors.go
 var (
     ErrEmailDuplicate        = errors.New("email duplicate")
     ErrRegisterFormatInvalid = errors.New("register format invalid")
@@ -399,22 +405,21 @@ var (
 )
 ```
 
-### 2. ✍️ 撰寫 Handler
+### 2. ✍️ Write Handlers
 
-Handler 透過 `framework.Get[T]` 從 container 取得 service，不持有任何依賴。
+Handlers retrieve the service from the container via `framework.Get[T]` — no dependencies held directly.
 
 ```go
-// internal/user/handler.go
 type UserHandler struct{}
 
 func (h *UserHandler) service(r *http.Request) *UserService {
     return framework.Get[*UserService](r, "userService")
 }
 
-// Register：body 格式錯誤時讓 service 驗證並回傳 domain error（手動流）
+// Register: lets the service validate fields and return domain errors (manual flow)
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
     var req registerRequest
-    framework.ParseRequest(r, &req)  // error 由 service 驗證攔截
+    framework.ParseRequest(r, &req)  // zero-value on failure; service validates
     u, err := h.service(r).Register(req.Email, req.Name, req.Password)
     if err != nil {
         framework.HandleError(w, r, err)
@@ -423,7 +428,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
     framework.Respond(w, r, http.StatusCreated, userResponse{ID: u.ID, Email: u.Email, Name: u.Name})
 }
 
-// Login：body 格式錯誤直接 400，不進 service（自動流）
+// Login: bad request body → automatic 400, no service call (auto flow)
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
     var req loginRequest
     if err := framework.ParseOrRespond(w, r, &req); err != nil {
@@ -438,10 +443,9 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### 3. 🔧 組裝路由
+### 3. 🔧 Wire Up Routes
 
 ```go
-// internal/user/register.go
 func Register(router *framework.Router) {
     router.AddPlugin(
         plugin.NewExceptionMapperPlugin().
@@ -469,10 +473,9 @@ func Register(router *framework.Router) {
 }
 ```
 
-### 4. 🚀 啟動
+### 4. 🚀 Start the Server
 
 ```go
-// cmd/main/main.go
 func main() {
     r := framework.NewRouter()
     user.Register(r)
@@ -482,17 +485,30 @@ func main() {
 
 ---
 
-## 🛠️ 開發指令
+## 🛠️ Development Commands
 
-所有指令皆在 Docker 容器內執行，不需本地安裝 Go 環境。
+All commands run inside Docker — no local Go installation required.
 
 ```bash
-make all          # ✅ staticcheck + format + test + build（CI 完整流程）
-make test         # 🧪 執行 ./test/... 下的整合測試
-make build        # 🏗️ 編譯 binary
-make staticcheck  # 🔍 靜態分析
-make format       # 🎨 gofmt 格式化
+make all          # ✅ staticcheck + format + test + build (full CI pipeline)
+make test         # 🧪 Run integration tests under ./test/...
+make build        # 🏗️ Compile binary
+make staticcheck  # 🔍 Static analysis
+make format       # 🎨 gofmt
 make tidy         # 📦 go mod tidy
-make shell        # 🐚 進入容器互動 shell
-make clean        # 🧹 清除 binary 與 build cache
+make shell        # 🐚 Interactive container shell
+make clean        # 🧹 Remove binary and build cache
 ```
+
+---
+
+## 👤 Author
+
+**xchwan**
+
+- GitHub: [@xchwan](https://github.com/xchwan)
+- Email: qchwan@gmail.com
+
+---
+
+*Contributions are welcome! The `.claude/` directory and `CLAUDE.md` are checked in to help contributors get started with Claude Code without additional setup.*

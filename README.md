@@ -20,6 +20,7 @@ go get github.com/xchwan/simple-web-framework
 - [🔌 Plugin System](#-plugin-system)
 - [🗜️ Codec Extension](#️-codec-extension)
 - [📦 Full Example](#-full-example)
+- [🎨 Design Patterns](#-design-patterns)
 - [🛠️ Development Commands](#️-development-commands)
 - [👤 Author](#-author)
 
@@ -482,6 +483,58 @@ func main() {
     r.Run(":8080")
 }
 ```
+
+---
+
+## 🎨 Design Patterns
+
+This framework is intentionally built around well-known design patterns. Here is a map of where each pattern appears and why it was chosen.
+
+### Inversion of Control / Dependency Injection
+
+**Where:** `Container`, `router.Bind`, `framework.Get[T]`
+
+Dependencies are registered by name with a factory function and a lifecycle scope. The container resolves them lazily and injects them into the request context so handlers never construct their own dependencies — the framework drives the object graph.
+
+### Singleton / Prototype
+
+**Where:** `scope.SingletonScope`, `scope.PrototypeScope`, `scope.HttpRequestScope`
+
+Three lifecycle scopes control how the container creates instances. `SingletonScope` (default) creates once and reuses; `PrototypeScope` creates a fresh instance on every `Resolve`; `HttpRequestScope` creates once per HTTP request and caches it on the request context.
+
+### Chain of Responsibility
+
+**Where:** `Router.dispatch`
+
+Incoming requests are tried against each registered `HttpHandler` in order. The first handler that fully processes the request short-circuits the chain. If no handler matches, the best partial result (path matched vs. not matched at all) determines the 404 / 405 response.
+
+### Command (Dispatch Table)
+
+**Where:** `CodecRegistry`
+
+A hash map keyed by media type string stores `Codec` objects. When a request arrives, the registry looks up the key and dispatches to the matching codec — the caller never knows which implementation runs. This is the classic command dispatch table: **key → command → execute**.
+
+### Template Method (Hook)
+
+**Where:** `plugin.Installer`
+
+`Router.AddPlugin` defines a fixed startup sequence: store the plugin, then call `Install` if the plugin opts in. The *what to install* is left entirely to the plugin. The framework provides the skeleton; each plugin fills in its own step.
+
+### Pipeline (Filter Chain)
+
+**Where:** `plugin.ContextInjector`, `Router.injectContext`
+
+Every incoming request flows through all registered `ContextInjector` plugins in sequence. Each injector receives the request produced by the previous one and returns an enriched copy. Unlike a classic Chain of Responsibility, **every stage always runs** — there is no early exit. The default pass-through (`return r`) makes no-op stages free.
+
+### Go Implicit Interfaces — Capability Discovery Without Coupling
+
+**Where:** Plugin system throughout
+
+Rather than requiring plugins to declare `implements Installer` or `implements ContextInjector`, the router uses runtime type assertions (`if installer, ok := p.(plugin.Installer); ok`) to discover capabilities. This means:
+
+- A plugin has zero knowledge of the interfaces it satisfies — it just needs matching method signatures.
+- Adding a new lifecycle (a new interface) requires no changes to existing plugins.
+- In contrast, OOP languages (Java, C#) would require explicit interface declarations, coupling the plugin to the framework at compile time. Go's structural typing achieves the same extensibility without the coupling.
 
 ---
 

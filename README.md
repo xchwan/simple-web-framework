@@ -490,41 +490,44 @@ func main() {
 
 This framework is intentionally built around well-known design patterns. Here is a map of where each pattern appears and why it was chosen.
 
-### Inversion of Control / Dependency Injection
+### Factory Method
 
-**Where:** `Container`, `router.Bind`, `framework.Get[T]`
+**Where:** `router.Bind(name, func() any { ... })`
 
-Dependencies are registered by name with a factory function and a lifecycle scope. The container resolves them lazily and injects them into the request context so handlers never construct their own dependencies — the framework drives the object graph.
+Each dependency is registered with a factory function — the Factory Method. The caller defines *how* to create the object; the container decides *when* to call it based on the configured scope. This keeps construction logic close to the dependency definition while letting the framework control the lifecycle.
 
 ### Singleton / Prototype
 
 **Where:** `scope.SingletonScope`, `scope.PrototypeScope`, `scope.HttpRequestScope`
 
-Three lifecycle scopes control how the container creates instances. `SingletonScope` (default) creates once and reuses; `PrototypeScope` creates a fresh instance on every `Resolve`; `HttpRequestScope` creates once per HTTP request and caches it on the request context.
+Three lifecycle scopes sit on top of the Factory Method layer. `SingletonScope` (default) calls the factory once and caches the result for the application lifetime; `PrototypeScope` calls it on every `Resolve`; `HttpRequestScope` calls it once per HTTP request and caches it on the request context.
 
 ### Chain of Responsibility
 
-**Where:** `Router.dispatch`
+**Where:** `Router.dispatch` and `Router.injectContext`
 
-Incoming requests are tried against each registered `HttpHandler` in order. The first handler that fully processes the request short-circuits the chain. If no handler matches, the best partial result (path matched vs. not matched at all) determines the 404 / 405 response.
+The pattern appears in two forms:
+
+- **Classic (stop-on-match)** — `Router.dispatch` tries each registered `HttpHandler` in order. The first handler that fully processes the request short-circuits the chain. If none match, the best partial result determines the 404 / 405 response.
+- **Exhaustive variant (all-run)** — `Router.injectContext` passes the request through every `ContextInjector` plugin in sequence. Every stage always runs; each one receives the request enriched by the previous one and returns a further-enriched copy.
+
+### Decorator
+
+**Where:** `plugin.ContextInjector.Inject`
+
+Each `ContextInjector` wraps the incoming `*http.Request` with an additional layer of context via `r.WithContext(context.WithValue(...))` and returns the decorated copy. The original request is never mutated; instead, each injector adds a new layer — exactly the Decorator pattern applied to an immutable value.
+
+### Template Method (Hook)
+
+**Where:** `plugin.Installer`
+
+`Router.AddPlugin` defines a fixed startup sequence: store the plugin, then call `Install` if the plugin opts in. The framework provides the invariant skeleton; each plugin fills in its own `Install` step — or skips it entirely by not implementing the interface.
 
 ### Command (Dispatch Table)
 
 **Where:** `CodecRegistry`
 
 A hash map keyed by media type string stores `Codec` objects. When a request arrives, the registry looks up the key and dispatches to the matching codec — the caller never knows which implementation runs. This is the classic command dispatch table: **key → command → execute**.
-
-### Template Method (Hook)
-
-**Where:** `plugin.Installer`
-
-`Router.AddPlugin` defines a fixed startup sequence: store the plugin, then call `Install` if the plugin opts in. The *what to install* is left entirely to the plugin. The framework provides the skeleton; each plugin fills in its own step.
-
-### Pipeline (Filter Chain)
-
-**Where:** `plugin.ContextInjector`, `Router.injectContext`
-
-Every incoming request flows through all registered `ContextInjector` plugins in sequence. Each injector receives the request produced by the previous one and returns an enriched copy. Unlike a classic Chain of Responsibility, **every stage always runs** — there is no early exit. The default pass-through (`return r`) makes no-op stages free.
 
 ### Go Implicit Interfaces — Capability Discovery Without Coupling
 

@@ -1,29 +1,29 @@
-// Package routing 提供 HTTP 路由的核心介面與元件。
+// Package routing provides the core interfaces and components for HTTP routing.
 package routing
 
 import "net/http"
 
-// HandleResult 表示 handler 對一個請求的處理結果。
+// HandleResult indicates how a handler responded to a request.
 type HandleResult int
 
 const (
-	// NotMatched 表示此 handler 完全不匹配，Router 繼續往下嘗試。
+	// NotMatched means this handler did not match at all; the Router continues to the next.
 	NotMatched HandleResult = iota
-	// PathMatched 表示路徑符合但 Method 不符，Router 應回傳 405。
+	// PathMatched means the path matched but the HTTP method did not; the Router should return 405.
 	PathMatched HandleResult = iota
-	// Handled 表示已完整處理請求，Router 應停止往下嘗試。
+	// Handled means the request was fully processed; the Router stops immediately.
 	Handled HandleResult = iota
 )
 
-// HttpHandler 是框架內所有路由元件共同實作的介面。
+// HttpHandler is the interface implemented by all routing components in the framework.
 type HttpHandler interface {
 	Handle(w http.ResponseWriter, r *http.Request) HandleResult
 }
 
-// HandlerFunc 是函式型別的轉接器，讓普通函式滿足 HttpHandler 介面。
+// HandlerFunc is a function adapter that satisfies the HttpHandler interface.
 type HandlerFunc func(w http.ResponseWriter, r *http.Request)
 
-// Handle 呼叫函式本身，並回傳 Handled。
+// Handle calls the function itself and returns Handled.
 func (f HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) HandleResult {
 	f(w, r)
 	return Handled

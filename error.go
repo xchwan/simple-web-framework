@@ -9,19 +9,19 @@ import (
 	"github.com/xchwan/simple-web-framework/routing"
 )
 
-// ErrBadRequest 是 framework 層的預設 sentinel，代表 request 格式錯誤（如 JSON 解析失敗）。
-// HandleError 會自動將它對應到 400，不需要在 ExceptionMapperPlugin 額外設定。
+// ErrBadRequest is a framework-level sentinel representing a malformed request (e.g. JSON parse failure).
+// HandleError maps it to 400 automatically — no ExceptionMapperPlugin configuration required.
 var ErrBadRequest = errors.New("bad request")
 
-// ErrorHandlerFunc 統一處理所有 routing 層的 HTTP 錯誤回應（404、405）。
+// ErrorHandlerFunc handles routing-layer HTTP errors (404, 405).
 type ErrorHandlerFunc func(w http.ResponseWriter, r *http.Request, statusCode int)
 
-// ErrorBody 是統一的 JSON 錯誤回應格式。
+// ErrorBody is the unified JSON error response structure.
 type ErrorBody struct {
 	Message string `json:"message"`
 }
 
-// Error 建立一個帶有訊息的 ErrorBody。
+// Error constructs an ErrorBody with the given message.
 func Error(message string) ErrorBody {
 	return ErrorBody{Message: message}
 }
@@ -39,7 +39,7 @@ func loadErrorHandler(r *http.Request) ErrorHandlerFunc {
 	return f
 }
 
-// handleRoutingError 依路由匹配結果呼叫 errorHandler，回傳 404 或 405。
+// handleRoutingError calls the error handler with 404 or 405 based on the best routing match.
 func handleRoutingError(w http.ResponseWriter, r *http.Request, f ErrorHandlerFunc, best routing.HandleResult) {
 	switch best {
 	case routing.PathMatched:
@@ -49,9 +49,9 @@ func handleRoutingError(w http.ResponseWriter, r *http.Request, f ErrorHandlerFu
 	}
 }
 
-// HandleError 將 error 轉成對應的 HTTP 回應，依序嘗試：
-//  1. ExceptionMapperPlugin 的自訂規則
-//  2. Framework 預設 mapping（如 ErrBadRequest → 400）
+// HandleError converts a Go error into an HTTP response, trying in order:
+//  1. ExceptionMapperPlugin custom rules
+//  2. Framework defaults (ErrBadRequest → 400)
 //  3. Fallback 500
 func HandleError(w http.ResponseWriter, r *http.Request, err error) {
 	if mapper := plugin.LoadExceptionMapper(r); mapper != nil {

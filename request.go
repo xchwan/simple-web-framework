@@ -6,16 +6,16 @@ import (
 	"github.com/xchwan/simple-web-framework/plugin"
 )
 
-// ParseRequest 依 Content-Type header 選擇對應的 Codec，將 request body 解析到 v。
-// 解析失敗時回傳原始 error，由呼叫方自行處理。
+// ParseRequest selects a Codec based on the Content-Type header and decodes the request body into v.
+// On failure the raw error is returned and the caller is responsible for responding.
 func ParseRequest(r *http.Request, v any) error {
 	_, c := plugin.Lookup(r, r.Header.Get("Content-Type"))
 	return c.Decode(r.Body, v)
 }
 
-// ParseOrRespond 與 ParseRequest 相同，但解析失敗時會自動呼叫 HandleError 寫入回應。
-// HandleError 依序嘗試 ExceptionMapperPlugin → framework 預設（ErrBadRequest → 400）→ 500。
-// 呼叫方只需判斷回傳的 error 是否為 nil 來決定是否 return，不需要自行處理錯誤。
+// ParseOrRespond behaves like ParseRequest but automatically calls HandleError on decode failure.
+// HandleError tries ExceptionMapperPlugin rules → ErrBadRequest default (400) → fallback 500.
+// The caller only needs to check whether the returned error is nil and return early if not.
 func ParseOrRespond(w http.ResponseWriter, r *http.Request, v any) error {
 	_, c := plugin.Lookup(r, r.Header.Get("Content-Type"))
 	if err := c.Decode(r.Body, v); err != nil {

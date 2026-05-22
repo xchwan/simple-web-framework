@@ -5,13 +5,13 @@ import (
 	"sync"
 )
 
-// SingletonScope 在整個程式執行期間只創建一個實體。
+// SingletonScope creates exactly one instance for the lifetime of the application.
 type SingletonScope struct {
 	once     sync.Once
 	instance any
 }
 
-// NewSingletonScope 建立一個 SingletonScope。
+// NewSingletonScope creates a SingletonScope.
 func NewSingletonScope() *SingletonScope {
 	return &SingletonScope{}
 }

@@ -6,7 +6,8 @@ import (
 	"reflect"
 )
 
-// XmlCodec 提供 application/xml 的序列化/反序列化支援。
+// XmlCodec provides application/xml serialization and deserialization.
+// It implements Installer to register itself into the CodecRegistry at startup.
 type XmlCodec struct{}
 
 func (c *XmlCodec) Install(ctx PluginContext) {

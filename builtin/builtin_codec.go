@@ -8,7 +8,7 @@ import (
 	"github.com/xchwan/simple-web-framework/plugin"
 )
 
-// JsonCodec 是 application/json 的內建 Codec。
+// JsonCodec is the built-in Codec for application/json.
 type JsonCodec struct{}
 
 func (c *JsonCodec) Encode(w io.Writer, v any) error {
@@ -19,7 +19,7 @@ func (c *JsonCodec) Decode(r io.Reader, v any) error {
 	return json.NewDecoder(r).Decode(v)
 }
 
-// TextCodec 是 text/plain 的內建 Codec。
+// TextCodec is the built-in Codec for text/plain.
 type TextCodec struct{}
 
 func (c *TextCodec) Encode(w io.Writer, v any) error {

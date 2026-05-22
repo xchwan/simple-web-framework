@@ -8,28 +8,28 @@ import (
 	"github.com/xchwan/simple-web-framework/scope"
 )
 
-// containerKey 是在 context 中存取 Container 的 key。
+// containerKey is the context key used to store and retrieve the Container.
 type containerKey struct{}
 
-// registration 儲存一個依賴的工廠函式與生命週期。
+// registration holds the factory function and lifecycle scope for a single dependency.
 type registration struct {
 	factory func() any
 	scope   scope.Scope
 }
 
-// Container 管理依賴的工廠函式與生命週期。
+// Container manages dependency registrations and their lifecycles.
 type Container struct {
 	mu            sync.RWMutex
 	registrations map[string]registration
 }
 
-// NewContainer 建立一個空的 Container。
+// NewContainer creates an empty Container.
 func NewContainer() *Container {
 	return &Container{registrations: make(map[string]registration)}
 }
 
-// Register 向容器註冊一個依賴。
-// s 省略時預設使用 SingletonScope。
+// Register adds a dependency to the container.
+// Defaults to SingletonScope when no scope is provided.
 func (c *Container) Register(name string, factory func() any, s ...scope.Scope) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -40,7 +40,7 @@ func (c *Container) Register(name string, factory func() any, s ...scope.Scope) 
 	c.registrations[name] = registration{factory: factory, scope: sc}
 }
 
-// Resolve 從容器取得指定名稱的依賴實體，可在工廠函式中呼叫以解析鏈式依賴。
+// Resolve retrieves the named dependency, delegating creation to the registered scope.
 func (c *Container) Resolve(ctx context.Context, name string) any {
 	c.mu.RLock()
 	r, ok := c.registrations[name]
@@ -55,13 +55,13 @@ func (c *Container) get(ctx context.Context, name string) any {
 	return c.Resolve(ctx, name)
 }
 
-// injectContainer 將 container 注入 request context，同時注入 HttpRequestScope 所需的 store。
+// injectContainer stores the container in the request context and initialises the HttpRequestScope store.
 func injectContainer(r *http.Request, c *Container) *http.Request {
 	r = scope.InjectRequestScopeStore(r)
 	return r.WithContext(context.WithValue(r.Context(), containerKey{}, c))
 }
 
-// Get 從 request context 中的 Container 取出指定名稱的依賴實體。
+// Get retrieves a named dependency from the container stored in the request context.
 func Get[T any](r *http.Request, name string) T {
 	c := r.Context().Value(containerKey{}).(*Container)
 	return c.get(r.Context(), name).(T)

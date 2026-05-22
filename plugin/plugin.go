@@ -5,15 +5,19 @@ import (
 	"reflect"
 )
 
-// PluginContext 是插件安裝時可存取的所有已註冊資源，以型別為 key。
+// PluginContext is a map of all currently registered resources, keyed by type.
+// It is passed to Installer.Install so plugins can look up other resources (e.g. CodecRegistry)
+// without the Router knowing about any concrete types.
 type PluginContext map[reflect.Type]any
 
-// Installer 由需要在安裝時做初始化（如向 CodecRegistry 註冊）的插件實作。
+// Installer is implemented by plugins that need one-time initialisation at install time
+// (e.g. registering a codec into CodecRegistry).
 type Installer interface {
 	Install(ctx PluginContext)
 }
 
-// ContextInjector 由需要在每個 request 注入 context 的插件實作。
+// ContextInjector is implemented by plugins that need to inject data into the request context
+// on every incoming request.
 type ContextInjector interface {
 	Inject(r *http.Request) *http.Request
 }

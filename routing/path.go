@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-// PathHandler 只在請求的 URL Path 符合 pattern 時才將請求往下傳遞。
-// pattern 支援 {param} 語法，例如 /api/users/{id}。
+// PathHandler forwards a request to the wrapped handler only when the URL path matches the pattern.
+// Patterns support {param} syntax, e.g. /api/users/{id}.
 type PathHandler struct {
 	segments []string
 	wrapped  HttpHandler
 }
 
-// NewPathHandler 建立一個 PathHandler，包裝 wrapped handler。
+// NewPathHandler creates a PathHandler that wraps the given handler.
 func NewPathHandler(pattern string, wrapped HttpHandler) *PathHandler {
 	return &PathHandler{
 		segments: strings.Split(strings.Trim(pattern, "/"), "/"),
@@ -21,7 +21,8 @@ func NewPathHandler(pattern string, wrapped HttpHandler) *PathHandler {
 	}
 }
 
-// Handle 實作 HttpHandler。路徑不符回傳 NotMatched，符合則將 path params 存入 context 後交給 wrapped。
+// Handle implements HttpHandler. Returns NotMatched when the path does not match.
+// On match, extracts path parameters into the request context and delegates to the wrapped handler.
 func (d *PathHandler) Handle(w http.ResponseWriter, r *http.Request) HandleResult {
 	params, ok := matchPath(d.segments, r.URL.Path)
 	if !ok {
@@ -31,7 +32,7 @@ func (d *PathHandler) Handle(w http.ResponseWriter, r *http.Request) HandleResul
 	return d.wrapped.Handle(w, r)
 }
 
-// matchPath 比對 pattern segments 與實際路徑，回傳擷取到的 path params。
+// matchPath compares pattern segments against the actual path and returns extracted path parameters.
 func matchPath(segments []string, path string) (map[string]string, bool) {
 	pathSegments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) != len(pathSegments) {
@@ -48,10 +49,10 @@ func matchPath(segments []string, path string) (map[string]string, bool) {
 	return params, true
 }
 
-// pathParamsKey 是在 context 中存取 path params 的 key。
+// pathParamsKey is the context key used to store and retrieve path parameters.
 type pathParamsKey struct{}
 
-// PathParam 從 request context 取出指定的 path parameter。
+// PathParam retrieves a named path parameter from the request context.
 func PathParam(r *http.Request, key string) string {
 	if params, ok := r.Context().Value(pathParamsKey{}).(map[string]string); ok {
 		return params[key]

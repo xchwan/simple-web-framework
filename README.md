@@ -513,15 +513,15 @@ The pattern appears in two forms:
 
 ### Decorator
 
-**Where:** `plugin.ContextInjector.Inject`
+**Where:** `routing.HandlerFunc` → `routing.MethodHandler` → `routing.PathHandler`
 
-Each `ContextInjector` wraps the incoming `*http.Request` with an additional layer of context via `r.WithContext(context.WithValue(...))` and returns the decorated copy. The original request is never mutated; instead, each injector adds a new layer — exactly the Decorator pattern applied to an immutable value.
+All three implement `HttpHandler`. Each outer layer wraps the inner one and adds exactly one responsibility: `MethodHandler` guards the HTTP method; `PathHandler` matches the URL path and extracts path parameters. When `r.GET(path, f)` is called, the stack is assembled as `PathHandler(MethodHandler(HandlerFunc))` — a textbook Decorator chain.
 
 ### Template Method (Hook)
 
 **Where:** `plugin.Installer`
 
-`Router.AddPlugin` defines a fixed startup sequence: store the plugin, then call `Install` if the plugin opts in. The framework provides the invariant skeleton; each plugin fills in its own `Install` step — or skips it entirely by not implementing the interface.
+`Router.AddPlugin` defines a fixed startup skeleton: store the plugin, then call `Install` if the plugin opts in. The framework owns the sequence; each plugin fills in its own `Install` step — or skips it entirely by not implementing the interface.
 
 ### Command (Dispatch Table)
 

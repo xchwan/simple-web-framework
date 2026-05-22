@@ -2,10 +2,10 @@ package scope
 
 import "context"
 
-// PrototypeScope 每次 Resolve 都創建一個全新的實體。
+// PrototypeScope creates a new instance on every Resolve call.
 type PrototypeScope struct{}
 
-// NewPrototypeScope 建立一個 PrototypeScope。
+// NewPrototypeScope creates a PrototypeScope.
 func NewPrototypeScope() *PrototypeScope {
 	return &PrototypeScope{}
 }

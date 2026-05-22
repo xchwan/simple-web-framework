@@ -2,18 +2,19 @@ package routing
 
 import "net/http"
 
-// MethodHandler 只在請求的 HTTP Method 符合時才將請求往下傳遞。
+// MethodHandler forwards a request to the wrapped handler only when the HTTP method matches.
 type MethodHandler struct {
 	method  string
 	wrapped HttpHandler
 }
 
-// NewMethodHandler 建立一個 MethodHandler，包裝 wrapped handler。
+// NewMethodHandler creates a MethodHandler that wraps the given handler.
 func NewMethodHandler(method string, wrapped HttpHandler) *MethodHandler {
 	return &MethodHandler{method: method, wrapped: wrapped}
 }
 
-// Handle 實作 HttpHandler。Method 不符回傳 PathMatched，符合則交給 wrapped。
+// Handle implements HttpHandler. Returns PathMatched when the method does not match,
+// or delegates to the wrapped handler when it does.
 func (d *MethodHandler) Handle(w http.ResponseWriter, r *http.Request) HandleResult {
 	if r.Method != d.method {
 		return PathMatched

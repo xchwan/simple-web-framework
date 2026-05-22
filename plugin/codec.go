@@ -10,22 +10,22 @@ import (
 
 type codecRegistryKey struct{}
 
-// CodecRegistry 管理 media type → Codec 的對應，並負責將自身注入 request context。
+// CodecRegistry maps media types to Codec implementations and injects itself into the request context.
 type CodecRegistry struct {
 	codecs map[string]Codec
 }
 
-// NewCodecRegistry 建立一個空的 CodecRegistry。
+// NewCodecRegistry creates an empty CodecRegistry.
 func NewCodecRegistry() *CodecRegistry {
 	return &CodecRegistry{codecs: make(map[string]Codec)}
 }
 
-// Register 新增或覆蓋一個 media type 的 Codec。
+// Register adds or replaces the Codec for the given media type.
 func (cr *CodecRegistry) Register(mediaType string, c Codec) {
 	cr.codecs[mediaType] = c
 }
 
-// Inject 實作 ContextInjector，將自身注入 request context。
+// Inject implements ContextInjector, storing the registry in the request context.
 func (cr *CodecRegistry) Inject(r *http.Request) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), codecRegistryKey{}, cr))
 }
@@ -35,7 +35,7 @@ func loadCodecRegistry(r *http.Request) *CodecRegistry {
 	return cr
 }
 
-// Lookup 依 Content-Type header 查找對應的 Codec，找不到時 fallback 為 JSON。
+// Lookup finds the Codec for the given Content-Type. Falls back to JSON when no match is found.
 func Lookup(r *http.Request, contentType string) (string, Codec) {
 	mt, _, _ := mime.ParseMediaType(contentType)
 	if cr := loadCodecRegistry(r); cr != nil {
@@ -46,13 +46,13 @@ func Lookup(r *http.Request, contentType string) (string, Codec) {
 	return "application/json", &jsonFallback{}
 }
 
-// Codec 負責特定 media type 的序列化與反序列化。
+// Codec handles serialization and deserialization for a specific media type.
 type Codec interface {
 	Encode(w io.Writer, v any) error
 	Decode(r io.Reader, v any) error
 }
 
-// jsonFallback 是 Lookup 找不到匹配 Codec 時的預設實作。
+// jsonFallback is the default Codec used when Lookup finds no matching media type.
 type jsonFallback struct{}
 
 func (c *jsonFallback) Encode(w io.Writer, v any) error {

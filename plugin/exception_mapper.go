@@ -8,30 +8,30 @@ import (
 
 type exceptionMapperKey struct{}
 
-// exceptionRule 儲存一條 error → statusCode + message 的對應規則。
+// exceptionRule stores the HTTP status code and message for a single error mapping.
 type exceptionRule struct {
 	statusCode int
 	message    string
 }
 
-// ExceptionMapperPlugin 以 hash table 將 error 對應到 HTTP status code 與回應訊息。
+// ExceptionMapperPlugin maps errors to HTTP status codes and response messages using a hash table.
 type ExceptionMapperPlugin struct {
 	rules map[error]exceptionRule
 }
 
-// NewExceptionMapperPlugin 建立一個空的 ExceptionMapperPlugin。
+// NewExceptionMapperPlugin creates an empty ExceptionMapperPlugin.
 func NewExceptionMapperPlugin() *ExceptionMapperPlugin {
 	return &ExceptionMapperPlugin{rules: make(map[error]exceptionRule)}
 }
 
-// On 新增一條 error → statusCode + message 的對應規則，支援鏈式呼叫。
+// On registers an error → statusCode + message mapping. Supports method chaining.
 func (p *ExceptionMapperPlugin) On(err error, statusCode int, message string) *ExceptionMapperPlugin {
 	p.rules[err] = exceptionRule{statusCode, message}
 	return p
 }
 
-// Map 查找 error 對應的 status code 與訊息。
-// 先直接查 map（O(1)），找不到再用 errors.Is 處理 wrapped error（O(n)）。
+// Map looks up the status code and message for the given error.
+// Tries direct map lookup first (O(1)), then falls back to errors.Is for wrapped errors (O(n)).
 func (p *ExceptionMapperPlugin) Map(err error) (statusCode int, message string, ok bool) {
 	if rule, found := p.rules[err]; found {
 		return rule.statusCode, rule.message, true
@@ -44,12 +44,12 @@ func (p *ExceptionMapperPlugin) Map(err error) (statusCode int, message string, 
 	return 0, "", false
 }
 
-// Inject 實作 ContextInjector，將自身注入 request context。
+// Inject implements ContextInjector, storing the mapper in the request context.
 func (p *ExceptionMapperPlugin) Inject(r *http.Request) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), exceptionMapperKey{}, p))
 }
 
-// LoadExceptionMapper 從 request context 取出 ExceptionMapperPlugin。
+// LoadExceptionMapper retrieves the ExceptionMapperPlugin from the request context.
 func LoadExceptionMapper(r *http.Request) *ExceptionMapperPlugin {
 	m, _ := r.Context().Value(exceptionMapperKey{}).(*ExceptionMapperPlugin)
 	return m

@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// DefaultErrorHandler 是預設的錯誤處理，回傳 JSON 格式的錯誤訊息。
+// DefaultErrorHandler responds with a JSON error body for routing-layer errors (404, 405).
 func DefaultErrorHandler(w http.ResponseWriter, r *http.Request, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)

@@ -6,20 +6,20 @@ import (
 	"sync"
 )
 
-// StoreKey 是在 context 中存取 RequestScopeStore 的 key。
+// StoreKey is the context key used to store and retrieve the RequestScopeStore.
 type StoreKey struct{}
 
-// RequestScopeStore 儲存同一個 HTTP request 內各個 HttpRequestScope 的實體。
+// RequestScopeStore caches instances created by HttpRequestScope for a single HTTP request.
 type RequestScopeStore struct {
 	mu        sync.Mutex
 	instances map[any]any
 }
 
-// HttpRequestScope 在每一次 HTTP request 期間只創建一個實體。
-// 不同 request 各自擁有獨立的實體。
+// HttpRequestScope creates one instance per HTTP request.
+// Distinct requests each get their own independent instance.
 type HttpRequestScope struct{}
 
-// NewHttpRequestScope 建立一個 HttpRequestScope。
+// NewHttpRequestScope creates an HttpRequestScope.
 func NewHttpRequestScope() *HttpRequestScope {
 	return &HttpRequestScope{}
 }
@@ -39,8 +39,8 @@ func (s *HttpRequestScope) Resolve(ctx context.Context, factory func() any) any 
 	return instance
 }
 
-// InjectRequestScopeStore 在每個 HTTP request 開始時將空的 store 注入 context。
-// 由 Router.ServeHTTP 呼叫。
+// InjectRequestScopeStore attaches a fresh empty store to the request context at the start of each request.
+// Called by Router.injectContext.
 func InjectRequestScopeStore(r *http.Request) *http.Request {
 	store := &RequestScopeStore{instances: make(map[any]any)}
 	return r.WithContext(context.WithValue(r.Context(), StoreKey{}, store))

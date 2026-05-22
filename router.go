@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/xchwan/simple-web-framework/framework/builtin"
-	"github.com/xchwan/simple-web-framework/framework/plugin"
-	"github.com/xchwan/simple-web-framework/framework/routing"
-	"github.com/xchwan/simple-web-framework/framework/scope"
+	"github.com/xchwan/simple-web-framework/builtin"
+	"github.com/xchwan/simple-web-framework/plugin"
+	"github.com/xchwan/simple-web-framework/routing"
+	"github.com/xchwan/simple-web-framework/scope"
 )
 
 // HandlerFunc 是 routing.HandlerFunc 的型別別名，讓使用者不需要直接 import routing 套件。

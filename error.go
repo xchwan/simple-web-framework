@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/xchwan/simple-web-framework/framework/plugin"
-	"github.com/xchwan/simple-web-framework/framework/routing"
+	"github.com/xchwan/simple-web-framework/plugin"
+	"github.com/xchwan/simple-web-framework/routing"
 )
 
 // ErrBadRequest 是 framework 層的預設 sentinel，代表 request 格式錯誤（如 JSON 解析失敗）。

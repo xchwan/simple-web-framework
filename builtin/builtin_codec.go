@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/xchwan/simple-web-framework/framework/plugin"
+	"github.com/xchwan/simple-web-framework/plugin"
 )
 
 // JsonCodec 是 application/json 的內建 Codec。

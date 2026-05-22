@@ -3,7 +3,7 @@ package framework
 import (
 	"net/http"
 
-	"github.com/xchwan/simple-web-framework/framework/plugin"
+	"github.com/xchwan/simple-web-framework/plugin"
 )
 
 // ParseRequest 依 Content-Type header 選擇對應的 Codec，將 request body 解析到 v。

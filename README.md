@@ -27,7 +27,7 @@ package main
 
 import (
     "net/http"
-    "github.com/xchwan/simple-web-framework/framework"
+    "github.com/xchwan/simple-web-framework"
 )
 
 func main() {
@@ -190,7 +190,7 @@ if someFormatInvalid {
 在組裝路由時安裝插件，一次定義所有業務錯誤的 HTTP 對應。
 
 ```go
-import "github.com/xchwan/simple-web-framework/framework/plugin"
+import "github.com/xchwan/simple-web-framework/plugin"
 
 router.AddPlugin(
     plugin.NewExceptionMapperPlugin().
@@ -272,7 +272,7 @@ router.GET("/api/users", h.List)
 | 🌐 `HttpRequestScope` | 同一個 HTTP request 內共用同一個 instance | `scope.NewHttpRequestScope()` |
 
 ```go
-import "github.com/xchwan/simple-web-framework/framework/scope"
+import "github.com/xchwan/simple-web-framework/scope"
 
 // 每個 request 共享同一個 service instance
 router.Bind("userService", func() any {
@@ -343,7 +343,7 @@ func (c *XmlCodec) Install(ctx plugin.PluginContext) {
 框架內建 `XmlCodec`，安裝後即可處理 `application/xml` 請求與回應。
 
 ```go
-import "github.com/xchwan/simple-web-framework/framework/plugin"
+import "github.com/xchwan/simple-web-framework/plugin"
 
 router.AddPlugin(&plugin.XmlCodec{})
 ```
@@ -356,7 +356,7 @@ router.AddPlugin(&plugin.XmlCodec{})
 import (
     "io"
     "reflect"
-    "github.com/xchwan/simple-web-framework/framework/plugin"
+    "github.com/xchwan/simple-web-framework/plugin"
 )
 
 type MsgpackCodec struct{}

@@ -3,7 +3,7 @@ package framework
 import (
 	"net/http"
 
-	"github.com/xchwan/simple-web-framework/framework/plugin"
+	"github.com/xchwan/simple-web-framework/plugin"
 )
 
 // Respond 依 Content-Type header 選擇對應的 Codec，將 body 序列化後回傳。

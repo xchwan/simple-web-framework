@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/xchwan/simple-web-framework/framework/scope"
+	"github.com/xchwan/simple-web-framework/scope"
 )
 
 // containerKey 是在 context 中存取 Container 的 key。

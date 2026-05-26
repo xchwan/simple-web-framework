@@ -5,16 +5,16 @@ The framework can automatically generate interactive API documentation powered b
 ## Setup
 
 ```go
-import "github.com/xchwan/simple-web-framework/plugin"
+import apidoc "github.com/xchwan/simple-web-framework/plugin/doc"
 
-docs := plugin.NewDocPlugin()
+docs := apidoc.NewDocPlugin()
 router.AddPlugin(docs)
 
 // Routes registered with Doc[Req, Resp] appear in the docs
-router.POST("/api/users",        h.Create, plugin.Doc[CreateUserRequest, UserResponse](docs))
-router.POST("/api/users/login",  h.Login,  plugin.Doc[LoginRequest, LoginResponse](docs))
-router.GET("/api/users",         h.List,   plugin.Doc[plugin.NoBody, []UserResponse](docs))
-router.DELETE("/api/users/{id}", h.Delete, plugin.Doc[plugin.NoBody, plugin.NoBody](docs))
+router.POST("/api/users",        h.Create, apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create))
+router.POST("/api/users/login",  h.Login,  apidoc.Doc[LoginRequest, LoginResponse](docs, h.Login))
+router.GET("/api/users",         h.List,   apidoc.Doc[apidoc.NoBody, []UserResponse](docs, h.List))
+router.DELETE("/api/users/{id}", h.Delete, apidoc.Doc[apidoc.NoBody, apidoc.NoBody](docs, h.Delete))
 
 // Routes without Doc are unaffected — they simply don't appear in the docs
 router.GET("/health", h.Health)
@@ -26,24 +26,42 @@ router.GET("/openapi.json", docs.SpecHandler())  // OpenAPI 3.0 JSON spec
 
 Open `http://localhost:8080/docs` to see the interactive documentation.
 
-## Doc[Req, Resp]
+## Adding Descriptions
 
-`plugin.Doc[Req, Resp](docs)` is the last argument to any route registration method. It:
+### Plain string — shorthand for Summary
 
-1. Stores the request/response type metadata in `docs` keyed by the handler's function pointer
-2. Returns the original handler **unchanged** — no runtime overhead on the request path
-3. When the router registers the route, it calls `docs.OnRegister(method, path, f)` which matches the pointer and records method + path + schema
+```go
+router.POST("/api/users", h.Create,
+    apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user"))
+```
+
+### DocOption — explicit and composable
+
+```go
+router.POST("/api/users", h.Create,
+    apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create,
+        apidoc.Summary("Register a new user"),
+        apidoc.Description("Creates a new account. The email address must be unique."),
+        apidoc.Tags("users"),
+    ))
+```
+
+| Option | Swagger UI | OpenAPI field |
+|--------|-----------|---------------|
+| `Summary(s)` | Endpoint title | `summary` |
+| `Description(s)` | Expanded detail text | `description` |
+| `Tags(t...)` | Section grouping | `tags` |
 
 ## NoBody
 
-Use `plugin.NoBody` as a type parameter when a route has no request or response body:
+Use `apidoc.NoBody` as a type parameter when a route has no request or response body:
 
 ```go
 // GET has no request body
-router.GET("/api/users", h.List, plugin.Doc[plugin.NoBody, []UserResponse](docs))
+router.GET("/api/users", h.List, apidoc.Doc[apidoc.NoBody, []UserResponse](docs, h.List))
 
 // DELETE has neither request nor response body
-router.DELETE("/api/users/{id}", h.Delete, plugin.Doc[plugin.NoBody, plugin.NoBody](docs))
+router.DELETE("/api/users/{id}", h.Delete, apidoc.Doc[apidoc.NoBody, apidoc.NoBody](docs, h.Delete))
 ```
 
 ## How It Works
@@ -51,16 +69,16 @@ router.DELETE("/api/users/{id}", h.Delete, plugin.Doc[plugin.NoBody, plugin.NoBo
 `DocPlugin` implements the `RouteHook` interface, which fires once per route at registration time:
 
 ```
-router.POST("/api/users", h.Create, plugin.Doc[CreateUserRequest, UserResponse](docs))
+router.POST("/api/users", h.Create, apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create))
   │
-  ├── plugin.Doc[...]  stores { reqType, respType } in docs.pending, keyed by f's pointer
-  │                    returns f unchanged
+  ├── apidoc.Doc[...]  stores { reqType, respType, summary, … } in docs.pending,
+  │                    keyed by h.Create's function pointer; returns h.Create unchanged
   │
-  └── router.POST      calls docs.OnRegister("POST", "/api/users", f)
+  └── router.POST      calls docs.OnRegister("POST", "/api/users", h.Create)
                          → matches pointer → records route doc → clears pending
 ```
 
-This means all metadata is collected **before the server starts**, and `/openapi.json` is fully populated from the first request.
+All metadata is collected **before the server starts**, so `/openapi.json` is fully populated from the very first request.
 
 ## Endpoints
 

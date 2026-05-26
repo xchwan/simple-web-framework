@@ -1,4 +1,4 @@
-package plugin
+package doc
 
 import (
 	"encoding/json"
@@ -6,43 +6,81 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/xchwan/simple-web-framework/plugin"
 )
+
+// HandlerFunc is an alias for convenience within this package.
+type HandlerFunc = plugin.HandlerFunc
 
 // NoBody is used as a type parameter when a route has no request or response body.
 //
-//	router.GET("/api/users", h.List, plugin.Doc[plugin.NoBody, []UserResponse](docs))
+//	router.GET("/api/users", h.List, doc.Doc[doc.NoBody, []UserResponse](docs, h.List))
 type NoBody = struct{}
 
-// Doc stores request/response type metadata in docs keyed by the handler's function pointer,
-// then returns the original handler unchanged. When the router registers the route,
-// it calls docs.OnRegister which matches the pointer, completes the record with method and path,
-// and clears the pending entry.
-//
-//	docs := plugin.NewDocPlugin()
-//	router.AddPlugin(docs)
-//	router.POST("/api/users", h.Create, plugin.Doc[CreateUserRequest, UserResponse](docs))
-func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc) HandlerFunc {
-	var req Req
-	var resp Resp
-	ptr := reflect.ValueOf(f).Pointer()
-	docs.pending.Store(ptr, docMeta{
-		requestType:  reflect.TypeOf(req),
-		responseType: reflect.TypeOf(resp),
-	})
-	return f
-}
-
+// docMeta holds all metadata collected for a single route at registration time.
 type docMeta struct {
 	requestType  reflect.Type
 	responseType reflect.Type
+	summary      string
+	description  string
+	tags         []string
+}
+
+// Doc stores request/response type metadata in docs keyed by the handler's function pointer,
+// then returns the original handler unchanged. The router calls docs.OnRegister which matches
+// the pointer, completes the record with method and path, and clears the pending entry.
+//
+// opts accepts a plain string (treated as Summary) or any number of DocOption values:
+//
+//	// plain string → summary
+//	doc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user")
+//
+//	// explicit options
+//	doc.Doc[CreateUserRequest, UserResponse](docs, h.Create,
+//	    doc.Summary("Register a new user"),
+//	    doc.Description("Email must be unique."),
+//	    doc.Tags("users"),
+//	)
+func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc, opts ...any) HandlerFunc {
+	var req Req
+	var resp Resp
+	meta := docMeta{
+		requestType:  reflect.TypeOf(req),
+		responseType: reflect.TypeOf(resp),
+	}
+	for _, o := range opts {
+		switch v := o.(type) {
+		case string:
+			meta.summary = v
+		case DocOption:
+			v(&meta)
+		}
+	}
+	docs.pending.Store(reflect.ValueOf(f).Pointer(), meta)
+	return f
+}
+
+// routeDoc is the collected metadata for a single route, ready for serialisation.
+type routeDoc struct {
+	Method      string         `json:"method"`
+	Path        string         `json:"path"`
+	Summary     string         `json:"summary,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Request     map[string]any `json:"request,omitempty"`
+	Response    map[string]any `json:"response,omitempty"`
 }
 
 // DocPlugin collects route metadata at registration time and serves interactive
 // API documentation powered by Swagger UI.
 //
-//	docs := plugin.NewDocPlugin()
+//	import apidoc "github.com/xchwan/simple-web-framework/plugin/doc"
+//
+//	docs := apidoc.NewDocPlugin()
 //	router.AddPlugin(docs)
-//	router.POST("/api/users", h.Create, plugin.Doc[CreateUserRequest, UserResponse](docs))
+//	router.POST("/api/users", h.Create,
+//	    apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user"))
 //	router.GET("/docs",         docs.UIHandler())
 //	router.GET("/openapi.json", docs.SpecHandler())
 type DocPlugin struct {
@@ -56,25 +94,30 @@ func NewDocPlugin() *DocPlugin {
 	return &DocPlugin{}
 }
 
-// OnRegister implements RouteHook. It is called by the router for every registered route.
-// If the handler was wrapped with Doc[Req, Resp], the pending metadata is matched by
-// function pointer, recorded with the given method and path, then removed from pending.
+var noBodyType = reflect.TypeOf(struct{}{})
+
+// OnRegister implements plugin.RouteHook. Called once per route at registration time.
 func (d *DocPlugin) OnRegister(method, path string, f HandlerFunc) {
-	ptr := reflect.ValueOf(f).Pointer()
-	val, ok := d.pending.LoadAndDelete(ptr)
+	val, ok := d.pending.LoadAndDelete(reflect.ValueOf(f).Pointer())
 	if !ok {
 		return
 	}
 	meta := val.(docMeta)
-	doc := routeDoc{Method: method, Path: path}
+	r := routeDoc{
+		Method:      method,
+		Path:        path,
+		Summary:     meta.summary,
+		Description: meta.description,
+		Tags:        meta.tags,
+	}
 	if meta.requestType != nil && meta.requestType != noBodyType {
-		doc.Request = typeSchema(meta.requestType)
+		r.Request = typeSchema(meta.requestType)
 	}
 	if meta.responseType != nil && meta.responseType != noBodyType {
-		doc.Response = typeSchema(meta.responseType)
+		r.Response = typeSchema(meta.responseType)
 	}
 	d.mu.Lock()
-	d.routes = append(d.routes, doc)
+	d.routes = append(d.routes, r)
 	d.mu.Unlock()
 }
 
@@ -119,17 +162,6 @@ func (d *DocPlugin) UIHandler() HandlerFunc {
 	}
 }
 
-// --- internal ---
-
-var noBodyType = reflect.TypeOf(struct{}{})
-
-type routeDoc struct {
-	Method   string         `json:"method"`
-	Path     string         `json:"path"`
-	Request  map[string]any `json:"request,omitempty"`
-	Response map[string]any `json:"response,omitempty"`
-}
-
 func (d *DocPlugin) buildSpec() map[string]any {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -139,8 +171,7 @@ func (d *DocPlugin) buildSpec() map[string]any {
 		if _, ok := paths[r.Path]; !ok {
 			paths[r.Path] = make(map[string]any)
 		}
-		pathItem := paths[r.Path].(map[string]any)
-		pathItem[strings.ToLower(r.Method)] = buildOperation(r)
+		paths[r.Path].(map[string]any)[strings.ToLower(r.Method)] = buildOperation(r)
 	}
 	return map[string]any{
 		"openapi": "3.0.0",
@@ -151,6 +182,15 @@ func (d *DocPlugin) buildSpec() map[string]any {
 
 func buildOperation(r routeDoc) map[string]any {
 	op := make(map[string]any)
+	if r.Summary != "" {
+		op["summary"] = r.Summary
+	}
+	if r.Description != "" {
+		op["description"] = r.Description
+	}
+	if len(r.Tags) > 0 {
+		op["tags"] = r.Tags
+	}
 	if r.Request != nil {
 		op["requestBody"] = map[string]any{
 			"required": true,

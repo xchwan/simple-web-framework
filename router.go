@@ -4,7 +4,10 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os/signal"
 	"reflect"
+	"syscall"
+	"time"
 
 	"github.com/xchwan/simple-web-framework/builtin"
 	"github.com/xchwan/simple-web-framework/hook"
@@ -26,21 +29,26 @@ func PathParam(r *http.Request, key string) string {
 
 // Router holds a set of HttpHandlers and tries each one in order for every incoming request.
 type Router struct {
-	handlers     []routing.HttpHandler
-	errorHandler ErrorHandlerFunc
-	container    *Container
-	plugins      map[reflect.Type]any
-	hooks        *hook.Hooks
+	handlers        []routing.HttpHandler
+	errorHandler    ErrorHandlerFunc
+	container       *Container
+	plugins         map[reflect.Type]any
+	hooks           *hook.Hooks
+	shutdownTimeout time.Duration
 }
+
+// defaultShutdownTimeout is used when the caller has not set a custom timeout.
+const defaultShutdownTimeout = 5 * time.Second
 
 // NewRouter creates and returns a new Router with the default error handler and
 // built-in JSON and text/plain codecs pre-registered.
 func NewRouter() *Router {
 	r := &Router{
-		errorHandler: builtin.DefaultErrorHandler,
-		container:    NewContainer(),
-		plugins:      make(map[reflect.Type]any),
-		hooks:        &hook.Hooks{},
+		errorHandler:    builtin.DefaultErrorHandler,
+		container:       NewContainer(),
+		plugins:         make(map[reflect.Type]any),
+		hooks:           &hook.Hooks{},
+		shutdownTimeout: defaultShutdownTimeout,
 	}
 	cr := plugin.NewCodecRegistry()
 	cr.Register("application/json", &builtin.JsonCodec{})
@@ -52,6 +60,12 @@ func NewRouter() *Router {
 // SetErrorHandler overrides the default routing-error handler (404 / 405).
 func (ro *Router) SetErrorHandler(f ErrorHandlerFunc) {
 	ro.errorHandler = f
+}
+
+// SetShutdownTimeout sets the maximum time Run will wait for in-flight requests
+// to finish after a SIGINT or SIGTERM is received. Defaults to 5 seconds.
+func (ro *Router) SetShutdownTimeout(d time.Duration) {
+	ro.shutdownTimeout = d
 }
 
 // AddPlugin installs a plugin, storing it in the plugins map keyed by its type.
@@ -114,9 +128,29 @@ func (ro *Router) PATCH(path string, f HandlerFunc, m ...MiddlewareFunc) {
 }
 
 // Run starts the HTTP server and listens on the given address (e.g. ":8080").
+// It blocks until SIGINT or SIGTERM is received, then gracefully shuts down:
+// new requests are rejected and in-flight requests are given up to
+// SetShutdownTimeout (default 5s) to complete before the server exits.
 func (ro *Router) Run(addr string) error {
-	log.Printf("Server listening on %s", addr)
-	return http.ListenAndServe(addr, ro)
+	srv := &http.Server{Addr: addr, Handler: ro}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("Server listening on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Printf("Shutting down (timeout: %s)…", ro.shutdownTimeout)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), ro.shutdownTimeout)
+	defer cancel()
+
+	return srv.Shutdown(shutdownCtx)
 }
 
 // ServeHTTP implements http.Handler and is the single entry point for every HTTP request.

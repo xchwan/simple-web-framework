@@ -5,7 +5,7 @@ The framework can automatically generate interactive API documentation powered b
 ## Setup
 
 ```go
-import apidoc "github.com/xchwan/simple-web-framework/plugin/doc"
+import "github.com/xchwan/simple-web-framework/plugin/apidoc"
 
 docs := apidoc.NewDocPlugin()
 router.AddPlugin(docs)

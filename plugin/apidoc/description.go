@@ -1,4 +1,4 @@
-package doc
+package apidoc
 
 // Description sets a long-form description for the route, shown when the endpoint is expanded in Swagger UI.
 //

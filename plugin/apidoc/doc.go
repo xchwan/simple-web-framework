@@ -1,4 +1,4 @@
-package doc
+package apidoc
 
 import (
 	"encoding/json"
@@ -73,7 +73,7 @@ type routeDoc struct {
 // DocPlugin collects route metadata at registration time and serves interactive
 // API documentation powered by Swagger UI.
 //
-//	import apidoc "github.com/xchwan/simple-web-framework/plugin/doc"
+//	import apidoc "github.com/xchwan/simple-web-framework/plugin/apidoc"
 //
 //	docs := apidoc.NewDocPlugin()
 //	router.AddPlugin(docs)

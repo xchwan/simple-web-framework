@@ -1,4 +1,4 @@
-package doc
+package apidoc
 
 // DocOption applies metadata directly to an OpenAPI operation map.
 // Each option is self-contained and knows exactly which field to set,

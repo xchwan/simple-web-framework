@@ -1,4 +1,4 @@
-package doc
+package apidoc
 
 // Summary sets a short description for the route, displayed as the endpoint title in Swagger UI.
 //

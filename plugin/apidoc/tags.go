@@ -1,4 +1,4 @@
-package doc
+package apidoc
 
 // Tags groups the route under one or more named sections in Swagger UI.
 //

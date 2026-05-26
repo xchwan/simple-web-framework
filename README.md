@@ -45,6 +45,7 @@ func main() {
 | [🗜️ Codec Extension](doc/codec-extension.md) | XML support, custom media types |
 | [🔗 Middleware Chain](doc/middleware.md) | Decorator pattern, pre/post handler logic |
 | [🪝 Hook System](doc/hooks.md) | `OnRequest`, `OnRespond`, `OnError` observers |
+| [🛑 Graceful Shutdown](doc/graceful-shutdown.md) | SIGINT / SIGTERM handling, drain in-flight requests |
 | [📦 Full Example](doc/full-example.md) | End-to-end user service wiring |
 | [🎨 Design Patterns](doc/design-patterns.md) | Factory Method, Decorator, Chain of Responsibility, … |
 

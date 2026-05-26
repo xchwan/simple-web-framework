@@ -7,5 +7,5 @@ package doc
 //	    doc.Tags("users"),
 //	)
 func Tags(tags ...string) DocOption {
-	return func(m *docMeta) { m.tags = tags }
+	return func(op map[string]any) { op["tags"] = tags }
 }

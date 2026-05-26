@@ -8,5 +8,5 @@ package doc
 //
 //	doc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user")
 func Summary(s string) DocOption {
-	return func(m *docMeta) { m.summary = s }
+	return func(op map[string]any) { op["summary"] = s }
 }

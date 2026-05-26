@@ -18,13 +18,13 @@ type HandlerFunc = plugin.HandlerFunc
 //	router.GET("/api/users", h.List, doc.Doc[doc.NoBody, []UserResponse](docs, h.List))
 type NoBody = struct{}
 
-// docMeta holds all metadata collected for a single route at registration time.
+// docMeta holds metadata collected for a single route at registration time.
+// options apply themselves directly to the OpenAPI operation map, so docMeta
+// never needs a new field when a new DocOption is introduced (OCP).
 type docMeta struct {
 	requestType  reflect.Type
 	responseType reflect.Type
-	summary      string
-	description  string
-	tags         []string
+	options      []DocOption
 }
 
 // Doc stores request/response type metadata in docs keyed by the handler's function pointer,
@@ -52,9 +52,9 @@ func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc, opts ...any) HandlerFunc
 	for _, o := range opts {
 		switch v := o.(type) {
 		case string:
-			meta.summary = v
+			meta.options = append(meta.options, Summary(v))
 		case DocOption:
-			v(&meta)
+			meta.options = append(meta.options, v)
 		}
 	}
 	docs.pending.Store(reflect.ValueOf(f).Pointer(), meta)
@@ -63,13 +63,11 @@ func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc, opts ...any) HandlerFunc
 
 // routeDoc is the collected metadata for a single route, ready for serialisation.
 type routeDoc struct {
-	Method      string         `json:"method"`
-	Path        string         `json:"path"`
-	Summary     string         `json:"summary,omitempty"`
-	Description string         `json:"description,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
-	Request     map[string]any `json:"request,omitempty"`
-	Response    map[string]any `json:"response,omitempty"`
+	method       string
+	path         string
+	requestType  reflect.Type
+	responseType reflect.Type
+	options      []DocOption
 }
 
 // DocPlugin collects route metadata at registration time and serves interactive
@@ -103,21 +101,14 @@ func (d *DocPlugin) OnRegister(method, path string, f HandlerFunc) {
 		return
 	}
 	meta := val.(docMeta)
-	r := routeDoc{
-		Method:      method,
-		Path:        path,
-		Summary:     meta.summary,
-		Description: meta.description,
-		Tags:        meta.tags,
-	}
-	if meta.requestType != nil && meta.requestType != noBodyType {
-		r.Request = typeSchema(meta.requestType)
-	}
-	if meta.responseType != nil && meta.responseType != noBodyType {
-		r.Response = typeSchema(meta.responseType)
-	}
 	d.mu.Lock()
-	d.routes = append(d.routes, r)
+	d.routes = append(d.routes, routeDoc{
+		method:       method,
+		path:         path,
+		requestType:  meta.requestType,
+		responseType: meta.responseType,
+		options:      meta.options,
+	})
 	d.mu.Unlock()
 }
 
@@ -168,10 +159,10 @@ func (d *DocPlugin) buildSpec() map[string]any {
 
 	paths := make(map[string]any)
 	for _, r := range d.routes {
-		if _, ok := paths[r.Path]; !ok {
-			paths[r.Path] = make(map[string]any)
+		if _, ok := paths[r.path]; !ok {
+			paths[r.path] = make(map[string]any)
 		}
-		paths[r.Path].(map[string]any)[strings.ToLower(r.Method)] = buildOperation(r)
+		paths[r.path].(map[string]any)[strings.ToLower(r.method)] = buildOperation(r)
 	}
 	return map[string]any{
 		"openapi": "3.0.0",
@@ -182,24 +173,21 @@ func (d *DocPlugin) buildSpec() map[string]any {
 
 func buildOperation(r routeDoc) map[string]any {
 	op := make(map[string]any)
-	if r.Summary != "" {
-		op["summary"] = r.Summary
+
+	// each option knows exactly which OpenAPI field to set
+	for _, opt := range r.options {
+		opt(op)
 	}
-	if r.Description != "" {
-		op["description"] = r.Description
-	}
-	if len(r.Tags) > 0 {
-		op["tags"] = r.Tags
-	}
-	if r.Request != nil {
+
+	if r.requestType != nil && r.requestType != noBodyType {
 		op["requestBody"] = map[string]any{
 			"required": true,
-			"content":  map[string]any{"application/json": map[string]any{"schema": r.Request}},
+			"content":  map[string]any{"application/json": map[string]any{"schema": typeSchema(r.requestType)}},
 		}
 	}
 	resp := map[string]any{"description": "Success"}
-	if r.Response != nil {
-		resp["content"] = map[string]any{"application/json": map[string]any{"schema": r.Response}}
+	if r.responseType != nil && r.responseType != noBodyType {
+		resp["content"] = map[string]any{"application/json": map[string]any{"schema": typeSchema(r.responseType)}}
 	}
 	op["responses"] = map[string]any{"200": resp}
 	return op

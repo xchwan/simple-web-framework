@@ -74,7 +74,7 @@ router.POST("/api/users", h.Create, apidoc.Doc[CreateUserRequest, UserResponse](
   ├── apidoc.Doc[...]  stores { reqType, respType, summary, … } in docs.pending,
   │                    keyed by h.Create's function pointer; returns h.Create unchanged
   │
-  └── router.POST      calls docs.OnRegister("POST", "/api/users", h.Create)
+  └── router.POST      calls docs.RouteAdded("POST", "/api/users", h.Create)
                          → matches pointer → records route doc → clears pending
 ```
 

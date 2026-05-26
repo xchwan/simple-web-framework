@@ -12,7 +12,7 @@ type Installer interface {
 // RouteHook is called once per route at registration time, before the server starts.
 // Useful for collecting route metadata (e.g. for documentation generation).
 type RouteHook interface {
-    OnRegister(method, path string, f HandlerFunc)
+    RouteAdded(method, path string, f HandlerFunc)
 }
 
 // ContextInjector is called on every incoming request to inject data into the request context.
@@ -38,7 +38,7 @@ router.AddPlugin(myPlugin)
 ```
 
 - If the plugin implements `Installer` → `Install` is called immediately with the current `PluginContext`
-- If the plugin implements `RouteHook` → `OnRegister` is called once for every route registered after this point
+- If the plugin implements `RouteHook` → `RouteAdded` is called once for every route registered after this point
 - If the plugin implements `ContextInjector` → `Inject` is called automatically on every request
 
 ## PluginContext — Bridge Between Plugins

@@ -107,11 +107,11 @@ func (ro *Router) register(h routing.HttpHandler) {
 	ro.handlers = append(ro.handlers, h)
 }
 
-// notifyRegister calls OnRegister on every plugin that implements RouteHook.
+// notifyRegister calls RouteAdded on every plugin that implements RouteHook.
 func (ro *Router) notifyRegister(method, path string, f HandlerFunc) {
 	for _, p := range ro.plugins {
 		if rh, ok := p.(plugin.RouteHook); ok {
-			rh.OnRegister(method, path, f)
+			rh.RouteAdded(method, path, f)
 		}
 	}
 }

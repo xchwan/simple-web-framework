@@ -28,7 +28,7 @@ type docMeta struct {
 }
 
 // Doc stores request/response type metadata in docs keyed by the handler's function pointer,
-// then returns the original handler unchanged. The router calls docs.OnRegister which matches
+// then returns the original handler unchanged. The router calls docs.RouteAdded which matches
 // the pointer, completes the record with method and path, and clears the pending entry.
 //
 // opts accepts a plain string (treated as Summary) or any number of DocOption values:
@@ -94,8 +94,8 @@ func NewDocPlugin() *DocPlugin {
 
 var noBodyType = reflect.TypeOf(struct{}{})
 
-// OnRegister implements plugin.RouteHook. Called once per route at registration time.
-func (d *DocPlugin) OnRegister(method, path string, f HandlerFunc) {
+// RouteAdded implements plugin.RouteHook. Called once per route at registration time.
+func (d *DocPlugin) RouteAdded(method, path string, f HandlerFunc) {
 	val, ok := d.pending.LoadAndDelete(reflect.ValueOf(f).Pointer())
 	if !ok {
 		return

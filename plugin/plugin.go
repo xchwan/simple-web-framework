@@ -28,7 +28,7 @@ type ContextInjector interface {
 }
 
 // RouteHook is implemented by plugins that need to observe route registrations.
-// OnRegister is called once per route at registration time, before the server starts.
+// RouteAdded is called once per route at registration time, before the server starts.
 type RouteHook interface {
-	OnRegister(method, path string, f HandlerFunc)
+	RouteAdded(method, path string, f HandlerFunc)
 }

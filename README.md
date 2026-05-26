@@ -36,7 +36,7 @@ func main() {
 
 | Topic | Description |
 |-------|-------------|
-| [🗺️ Routing](doc/routing.md) | Path params, query strings, HTTP methods, routing errors |
+| [🗺️ Routing](doc/routing.md) | Path params, query strings, HTTP methods, route grouping, `Routes` interface |
 | [📥 Request Parsing](doc/request-parsing.md) | `ParseRequest` (manual) and `ParseOrRespond` (auto) |
 | [📤 Response Serialization](doc/response.md) | Content-negotiation, error body format |
 | [🚨 Error Handling](doc/error-handling.md) | `HandleError`, `ErrBadRequest`, `ExceptionMapperPlugin` |

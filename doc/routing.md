@@ -36,6 +36,56 @@ r.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
+## Route Grouping
+
+Use `router.Group` to share a common path prefix and middlewares across multiple routes.
+
+```go
+// All routes under /api/users, all protected by Auth
+g := router.Group("/api/users", Auth)
+
+g.GET("",      h.List)
+g.POST("",     h.Create)
+g.GET("/{id}", h.Get)
+g.PATCH("/{id}", h.Update)
+g.DELETE("/{id}", h.Delete)
+```
+
+Per-route middlewares can still be added alongside the group-level ones. Execution order is always: **group middlewares → route middlewares → handler**.
+
+```go
+g.GET("/export", h.Export, RateLimit)
+// order: Auth → RateLimit → h.Export
+```
+
+### Nested Groups
+
+Groups can be nested — each child inherits the parent's prefix and middlewares.
+
+```go
+api := router.Group("/api")
+users := api.Group("/users", Auth)
+users.GET("", h.List)         // GET /api/users
+
+admin := api.Group("/admin", Auth, AdminOnly)
+admin.GET("/stats", h.Stats)  // GET /api/admin/stats
+```
+
+### Routes Interface
+
+Both `Router` and `Group` implement the `Routes` interface. Module wiring functions should accept `framework.Routes` so they work with either:
+
+```go
+func RegisterUserRoutes(r framework.Routes) {
+    g := r.Group("/api/users", Auth)
+    g.GET("",      h.List)
+    g.POST("",     h.Create)
+}
+
+RegisterUserRoutes(router)      // top-level
+RegisterUserRoutes(apiGroup)    // already-prefixed group
+```
+
 ## Routing Error Behavior
 
 | Scenario | HTTP Status Code |

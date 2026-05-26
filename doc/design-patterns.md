@@ -29,7 +29,9 @@ The pattern appears in two forms:
 
 All three implement `HttpHandler`. Each outer layer wraps the inner one and adds exactly one responsibility: `MethodHandler` guards the HTTP method; `PathHandler` matches the URL path and extracts path parameters. When `r.GET(path, f)` is called, the stack is assembled as `PathHandler(MethodHandler(HandlerFunc))` — a textbook Decorator chain.
 
-The same pattern is used for **middleware**: each `MiddlewareFunc` wraps the next handler, adding pre/post logic without modifying the underlying handler.
+The same pattern applies to **middleware**: each `MiddlewareFunc` wraps the next `HandlerFunc`, adding pre/post logic without touching the underlying handler.
+
+`Group` is also a Decorator of sorts — it wraps `Router` and transparently prepends a prefix and a set of middlewares to every route registered through it, while the Router itself remains unaware of groups.
 
 ## Template Method (Hook)
 
@@ -52,3 +54,5 @@ Rather than requiring plugins to declare `implements Installer` or `implements C
 - A plugin has zero knowledge of the interfaces it satisfies — it just needs matching method signatures.
 - Adding a new lifecycle (a new interface) requires no changes to existing plugins.
 - In contrast, OOP languages (Java, C#) would require explicit interface declarations, coupling the plugin to the framework at compile time. Go's structural typing achieves the same extensibility without the coupling.
+
+The `Routes` interface uses the same principle: `Router` and `Group` both satisfy it without declaring so — any type with the matching method set is automatically a `Routes`, enabling module wiring functions to accept either interchangeably.

@@ -15,17 +15,8 @@ import (
 // HandlerFunc is a type alias for routing.HandlerFunc so callers do not need to import the routing package directly.
 type HandlerFunc = routing.HandlerFunc
 
-// Middleware wraps a HandlerFunc with additional behaviour (Decorator pattern).
-// Middlewares are applied left-to-right: the first one in the list runs first.
-type Middleware func(next HandlerFunc) HandlerFunc
-
-// applyMiddleware wraps f with the given middlewares, outermost first.
-func applyMiddleware(f HandlerFunc, middlewares []Middleware) HandlerFunc {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		f = middlewares[i](f)
-	}
-	return f
-}
+// MiddlewareFunc is a type alias for routing.MiddlewareFunc so callers do not need to import the routing package directly.
+type MiddlewareFunc = routing.MiddlewareFunc
 
 // PathParam retrieves a named path parameter from the request context.
 func PathParam(r *http.Request, key string) string {
@@ -84,24 +75,24 @@ func (ro *Router) register(h routing.HttpHandler) {
 	ro.handlers = append(ro.handlers, h)
 }
 
-func (ro *Router) GET(path string, f HandlerFunc, m ...Middleware) {
-	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodGet, applyMiddleware(f, m))))
+func (ro *Router) GET(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodGet, routing.ChainMiddlewares(f, m))))
 }
 
-func (ro *Router) POST(path string, f HandlerFunc, m ...Middleware) {
-	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPost, applyMiddleware(f, m))))
+func (ro *Router) POST(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPost, routing.ChainMiddlewares(f, m))))
 }
 
-func (ro *Router) PUT(path string, f HandlerFunc, m ...Middleware) {
-	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPut, applyMiddleware(f, m))))
+func (ro *Router) PUT(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPut, routing.ChainMiddlewares(f, m))))
 }
 
-func (ro *Router) DELETE(path string, f HandlerFunc, m ...Middleware) {
-	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodDelete, applyMiddleware(f, m))))
+func (ro *Router) DELETE(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodDelete, routing.ChainMiddlewares(f, m))))
 }
 
-func (ro *Router) PATCH(path string, f HandlerFunc, m ...Middleware) {
-	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPatch, applyMiddleware(f, m))))
+func (ro *Router) PATCH(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPatch, routing.ChainMiddlewares(f, m))))
 }
 
 // Run starts the HTTP server and listens on the given address (e.g. ":8080").

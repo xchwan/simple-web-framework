@@ -107,23 +107,37 @@ func (ro *Router) register(h routing.HttpHandler) {
 	ro.handlers = append(ro.handlers, h)
 }
 
+// notifyRegister calls OnRegister on every plugin that implements RouteHook.
+func (ro *Router) notifyRegister(method, path string, f HandlerFunc) {
+	for _, p := range ro.plugins {
+		if rh, ok := p.(plugin.RouteHook); ok {
+			rh.OnRegister(method, path, f)
+		}
+	}
+}
+
 func (ro *Router) GET(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.notifyRegister(http.MethodGet, path, f)
 	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodGet, routing.ChainMiddlewares(f, m))))
 }
 
 func (ro *Router) POST(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.notifyRegister(http.MethodPost, path, f)
 	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPost, routing.ChainMiddlewares(f, m))))
 }
 
 func (ro *Router) PUT(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.notifyRegister(http.MethodPut, path, f)
 	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPut, routing.ChainMiddlewares(f, m))))
 }
 
 func (ro *Router) DELETE(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.notifyRegister(http.MethodDelete, path, f)
 	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodDelete, routing.ChainMiddlewares(f, m))))
 }
 
 func (ro *Router) PATCH(path string, f HandlerFunc, m ...MiddlewareFunc) {
+	ro.notifyRegister(http.MethodPatch, path, f)
 	ro.register(routing.NewPathHandler(path, routing.NewMethodHandler(http.MethodPatch, routing.ChainMiddlewares(f, m))))
 }
 

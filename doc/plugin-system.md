@@ -1,6 +1,6 @@
 # 🔌 Plugin System
 
-Plugins extend the framework through two focused interfaces:
+Plugins extend the framework through three focused interfaces, each firing at a different point in the lifecycle:
 
 ```go
 // Installer is called once when AddPlugin is invoked — for startup initialization
@@ -9,13 +9,27 @@ type Installer interface {
     Install(ctx PluginContext)
 }
 
+// RouteHook is called once per route at registration time, before the server starts.
+// Useful for collecting route metadata (e.g. for documentation generation).
+type RouteHook interface {
+    OnRegister(method, path string, f HandlerFunc)
+}
+
 // ContextInjector is called on every incoming request to inject data into the request context.
 type ContextInjector interface {
     Inject(r *http.Request) *http.Request
 }
 ```
 
-A plugin can implement one or both interfaces.
+A plugin can implement any combination of these interfaces.
+
+## Lifecycle Overview
+
+| Interface | When it fires | Use case |
+|-----------|--------------|----------|
+| `Installer` | Once at `AddPlugin` | Register codecs, set up shared resources |
+| `RouteHook` | Once per route registration | Collect route metadata, generate docs |
+| `ContextInjector` | Every incoming request | Inject per-request data into context |
 
 ## Installing a Plugin
 
@@ -24,6 +38,7 @@ router.AddPlugin(myPlugin)
 ```
 
 - If the plugin implements `Installer` → `Install` is called immediately with the current `PluginContext`
+- If the plugin implements `RouteHook` → `OnRegister` is called once for every route registered after this point
 - If the plugin implements `ContextInjector` → `Inject` is called automatically on every request
 
 ## PluginContext — Bridge Between Plugins
@@ -45,6 +60,7 @@ func (c *XmlCodec) Install(ctx plugin.PluginContext) {
 | `CodecRegistry` | `ContextInjector` | JSON + text/plain serialization, injected per request | ✅ Auto-installed |
 | `ExceptionMapperPlugin` | `ContextInjector` | Maps errors to HTTP status codes, injected per request | 🔧 Manual |
 | `XmlCodec` | `Installer` | Registers `application/xml` support into CodecRegistry | 🔧 Manual |
+| `DocPlugin` | `RouteHook` | Collects route metadata, serves OpenAPI 3.0 + Swagger UI | 🔧 Manual |
 
 ## Plugins vs Hooks
 

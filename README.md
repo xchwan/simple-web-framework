@@ -41,11 +41,12 @@ func main() {
 | [📤 Response Serialization](doc/response.md) | Content-negotiation, error body format |
 | [🚨 Error Handling](doc/error-handling.md) | `HandleError`, `ErrBadRequest`, `ExceptionMapperPlugin` |
 | [🧩 IoC Container](doc/ioc-container.md) | `Bind`, `Resolve`, `Get[T]`, lifecycle scopes |
-| [🔌 Plugin System](doc/plugin-system.md) | `Installer`, `ContextInjector`, `PluginContext` |
+| [🔌 Plugin System](doc/plugin-system.md) | `Installer`, `RouteHook`, `ContextInjector`, `PluginContext` |
 | [🗜️ Codec Extension](doc/codec-extension.md) | XML support, custom media types |
 | [🔗 Middleware Chain](doc/middleware.md) | Decorator pattern, pre/post handler logic |
 | [🪝 Hook System](doc/hooks.md) | `OnRequest`, `OnRespond`, `OnError` observers |
 | [🛑 Graceful Shutdown](doc/graceful-shutdown.md) | SIGINT / SIGTERM handling, drain in-flight requests |
+| [📖 API Documentation](doc/api-doc.md) | Swagger UI, OpenAPI 3.0, `DocPlugin`, `Doc[Req, Resp]` |
 | [📦 Full Example](doc/full-example.md) | End-to-end user service wiring |
 | [🎨 Design Patterns](doc/design-patterns.md) | Factory Method, Decorator, Chain of Responsibility, … |
 

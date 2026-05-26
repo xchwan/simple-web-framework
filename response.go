@@ -3,6 +3,7 @@ package framework
 import (
 	"net/http"
 
+	"github.com/xchwan/simple-web-framework/hook"
 	"github.com/xchwan/simple-web-framework/plugin"
 )
 
@@ -20,4 +21,5 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, body any) {
 	if body != nil {
 		c.Encode(w, body)
 	}
+	hook.Load(r).NotifyRespond(r, statusCode)
 }

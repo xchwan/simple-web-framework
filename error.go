@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/xchwan/simple-web-framework/hook"
 	"github.com/xchwan/simple-web-framework/plugin"
 	"github.com/xchwan/simple-web-framework/routing"
 )
@@ -54,6 +55,7 @@ func handleRoutingError(w http.ResponseWriter, r *http.Request, f ErrorHandlerFu
 //  2. Framework defaults (ErrBadRequest → 400)
 //  3. Fallback 500
 func HandleError(w http.ResponseWriter, r *http.Request, err error) {
+	hook.Load(r).NotifyError(r, err)
 	if mapper := plugin.LoadExceptionMapper(r); mapper != nil {
 		if code, msg, ok := mapper.Map(err); ok {
 			Respond(w, r, code, Error(msg))

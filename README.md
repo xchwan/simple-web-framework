@@ -19,6 +19,8 @@ go get github.com/xchwan/simple-web-framework
 - [♻️ Scopes (Lifecycle)](#️-scopes-lifecycle)
 - [🔌 Plugin System](#-plugin-system)
 - [🗜️ Codec Extension](#️-codec-extension)
+- [🔗 Middleware Chain](#-middleware-chain)
+- [🪝 Hook System](#-hook-system)
 - [📦 Full Example](#-full-example)
 - [🎨 Design Patterns](#-design-patterns)
 - [🛠️ Development Commands](#️-development-commands)
@@ -385,6 +387,111 @@ func (c *MsgpackCodec) Decode(r io.Reader, v any) error {
 // Install
 router.AddPlugin(&MsgpackCodec{})
 ```
+
+---
+
+## 🔗 Middleware Chain
+
+Middlewares wrap a handler using the **Decorator pattern**, running left-to-right before (and optionally after) the handler.
+
+```go
+router.GET("/api/events", h.List, Auth, RateLimit)
+// execution order: Auth → RateLimit → h.List
+```
+
+A middleware has the signature `func(next HandlerFunc) HandlerFunc`:
+
+```go
+func Auth(next framework.HandlerFunc) framework.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if !validate(token) {
+            framework.HandleError(w, r, ErrTokenInvalid)
+            return  // short-circuit: handler never called
+        }
+        next(w, r)
+    }
+}
+
+func RateLimit(next framework.HandlerFunc) framework.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        if exceeded() {
+            framework.HandleError(w, r, ErrRateLimitExceeded)
+            return
+        }
+        next(w, r)
+    }
+}
+```
+
+Middlewares can also run code **after** the handler by placing logic after `next(w, r)`:
+
+```go
+func Timing(next framework.HandlerFunc) framework.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next(w, r)
+        log.Printf("%s %s took %v", r.Method, r.URL.Path, time.Since(start))
+    }
+}
+```
+
+Use middleware when you need to **change or short-circuit request behaviour**.
+
+---
+
+## 🪝 Hook System
+
+Hooks are **fire-and-forget observers** for framework lifecycle events. Unlike middleware, they cannot intercept or modify the request — they can only observe.
+
+| Hook | Fires when | Signature |
+|------|-----------|-----------|
+| `OnRequest` | Every incoming request, before dispatch | `func(r *http.Request)` |
+| `OnRespond` | `Respond` writes a successful response | `func(r *http.Request, statusCode int)` |
+| `OnError` | `HandleError` writes an error response | `func(r *http.Request, err error)` |
+
+### When to use Hooks vs Middleware
+
+| | Middleware | Hook |
+|---|---|---|
+| Intercept / short-circuit request | ✅ | ❌ |
+| Modify response | ✅ | ❌ |
+| Observe status code | 🔶 needs ResponseWriter wrapper | ✅ built-in |
+| Logging, metrics, tracing | 🔶 complex | ✅ simple |
+
+### Examples
+
+```go
+// Logging — record every request and its outcome
+router.OnRequest(func(r *http.Request) {
+    log.Printf("→ %s %s", r.Method, r.URL.Path)
+})
+router.OnRespond(func(r *http.Request, statusCode int) {
+    log.Printf("← %d %s %s", statusCode, r.Method, r.URL.Path)
+})
+
+// Metrics — count responses by status code
+router.OnRespond(func(r *http.Request, statusCode int) {
+    metrics.Inc("http.response", statusCode)
+})
+
+// Error tracking — alert on unexpected server errors
+router.OnError(func(r *http.Request, err error) {
+    if !errors.Is(err, framework.ErrBadRequest) {
+        sentry.CaptureException(err)
+    }
+})
+
+// Distributed tracing — combine OnRequest + OnRespond for latency
+router.OnRequest(func(r *http.Request) {
+    trace.Start(r.Context(), r.URL.Path)
+})
+router.OnRespond(func(r *http.Request, statusCode int) {
+    trace.End(r.Context(), statusCode)
+})
+```
+
+Multiple hooks of the same type can be registered — all of them fire in registration order.
 
 ---
 

@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/xchwan/simple-web-framework/builtin"
+	"github.com/xchwan/simple-web-framework/hook"
 	"github.com/xchwan/simple-web-framework/plugin"
 	"github.com/xchwan/simple-web-framework/routing"
 	"github.com/xchwan/simple-web-framework/scope"
@@ -29,6 +30,7 @@ type Router struct {
 	errorHandler ErrorHandlerFunc
 	container    *Container
 	plugins      map[reflect.Type]any
+	hooks        *hook.Hooks
 }
 
 // NewRouter creates and returns a new Router with the default error handler and
@@ -38,6 +40,7 @@ func NewRouter() *Router {
 		errorHandler: builtin.DefaultErrorHandler,
 		container:    NewContainer(),
 		plugins:      make(map[reflect.Type]any),
+		hooks:        &hook.Hooks{},
 	}
 	cr := plugin.NewCodecRegistry()
 	cr.Register("application/json", &builtin.JsonCodec{})
@@ -69,6 +72,21 @@ func (ro *Router) Bind(name string, factory func() any, s ...scope.Scope) {
 // Resolve retrieves a named dependency from the container. Intended for use during startup wiring.
 func (ro *Router) Resolve(name string) any {
 	return ro.container.Resolve(context.Background(), name)
+}
+
+// OnRequest registers a hook that fires on every incoming request, before dispatch.
+func (ro *Router) OnRequest(f hook.OnRequestFunc) {
+	ro.hooks.AddOnRequest(f)
+}
+
+// OnRespond registers a hook that fires when Respond writes a successful response.
+func (ro *Router) OnRespond(f hook.OnRespondFunc) {
+	ro.hooks.AddOnRespond(f)
+}
+
+// OnError registers a hook that fires when HandleError writes an error response.
+func (ro *Router) OnError(f hook.OnErrorFunc) {
+	ro.hooks.AddOnError(f)
 }
 
 func (ro *Router) register(h routing.HttpHandler) {
@@ -104,6 +122,7 @@ func (ro *Router) Run(addr string) error {
 // ServeHTTP implements http.Handler and is the single entry point for every HTTP request.
 func (ro *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = ro.injectContext(r)
+	hook.Load(r).NotifyRequest(r)
 	ro.dispatch(w, r)
 }
 
@@ -112,6 +131,7 @@ func (ro *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //  1. errorHandler — makes the 404/405 handler available to the routing layer
 //  2. plugins (ContextInjector) — each plugin injects its own data (e.g. codec map, error rules)
 //  3. IoC container — enables Get[T] dependency resolution inside handlers
+//  4. hook registry — makes OnRequest/OnRespond/OnError hooks available to Respond and HandleError
 func (ro *Router) injectContext(r *http.Request) *http.Request {
 	r = storeErrorHandler(r, ro.errorHandler)
 	for _, p := range ro.plugins {
@@ -122,6 +142,7 @@ func (ro *Router) injectContext(r *http.Request) *http.Request {
 	if ro.container != nil {
 		r = injectContainer(r, ro.container)
 	}
+	r = ro.hooks.Inject(r)
 	return r
 }
 

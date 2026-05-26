@@ -71,21 +71,6 @@ admin := api.Group("/admin", Auth, AdminOnly)
 admin.GET("/stats", h.Stats)  // GET /api/admin/stats
 ```
 
-### Routes Interface
-
-Both `Router` and `Group` implement the `Routes` interface. Module wiring functions should accept `framework.Routes` so they work with either:
-
-```go
-func RegisterUserRoutes(r framework.Routes) {
-    g := r.Group("/api/users", Auth)
-    g.GET("",      h.List)
-    g.POST("",     h.Create)
-}
-
-RegisterUserRoutes(router)      // top-level
-RegisterUserRoutes(apiGroup)    // already-prefixed group
-```
-
 ## Routing Error Behavior
 
 | Scenario | HTTP Status Code |

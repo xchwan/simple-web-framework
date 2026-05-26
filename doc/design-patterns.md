@@ -55,4 +55,3 @@ Rather than requiring plugins to declare `implements Installer` or `implements C
 - Adding a new lifecycle (a new interface) requires no changes to existing plugins.
 - In contrast, OOP languages (Java, C#) would require explicit interface declarations, coupling the plugin to the framework at compile time. Go's structural typing achieves the same extensibility without the coupling.
 
-The `Routes` interface uses the same principle: `Router` and `Group` both satisfy it without declaring so — any type with the matching method set is automatically a `Routes`, enabling module wiring functions to accept either interchangeably.

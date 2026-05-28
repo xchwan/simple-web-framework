@@ -27,7 +27,7 @@ func NewHttpRequestScope() *HttpRequestScope {
 func (s *HttpRequestScope) Resolve(ctx context.Context, factory func() any) any {
 	store, ok := ctx.Value(StoreKey{}).(*RequestScopeStore)
 	if !ok {
-		return factory()
+		panic("HttpRequestScope.Resolve called without a request context — this is a framework bug")
 	}
 	store.mu.Lock()
 	defer store.mu.Unlock()

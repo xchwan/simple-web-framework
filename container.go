@@ -2,6 +2,7 @@ package framework
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -46,7 +47,10 @@ func (c *Container) Resolve(ctx context.Context, name string) any {
 	r, ok := c.registrations[name]
 	c.mu.RUnlock()
 	if !ok {
-		return nil
+		panic(fmt.Sprintf(
+			"dependency %q not found — register it with router.Bind(%q, func() any { return ... })",
+			name, name,
+		))
 	}
 	return r.scope.Resolve(ctx, r.factory)
 }

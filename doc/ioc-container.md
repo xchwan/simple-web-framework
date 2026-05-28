@@ -67,3 +67,22 @@ router.POST("/api/users", h.Create)
 - Use **Singleton** for stateless or connection-holding objects (DB, Redis, repositories)
 - Use **HttpRequestScope** for objects that carry per-request state (services, unit-of-work)
 - Use **Prototype** when each caller needs its own isolated instance (buffers, parsers)
+
+## Common Mistake: Resolving Without Binding
+
+Calling `Get[T]` or `router.Resolve` for a name that was never registered panics immediately with a clear message:
+
+```
+panic: dependency "userService" not found — register it with router.Bind("userService", func() any { return ... })
+```
+
+Make sure every name you resolve has a corresponding `Bind`:
+
+```go
+// ✅ correct
+router.Bind("userService", func() any { return NewUserService() })
+svc := framework.Get[*UserService](r, "userService")
+
+// ❌ panics — "userService" was never bound
+svc := framework.Get[*UserService](r, "userService")
+```

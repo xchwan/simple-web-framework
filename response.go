@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/xchwan/simple-web-framework/hook"
-	"github.com/xchwan/simple-web-framework/plugin"
+	"github.com/xchwan/simple-web-framework/plugin/codec"
 )
 
 // Respond selects a Codec based on the Content-Type header, serializes body, and writes the response.
@@ -15,7 +15,7 @@ func Respond(w http.ResponseWriter, r *http.Request, statusCode int, body any) {
 		w.WriteHeader(statusCode)
 		return
 	}
-	mt, c := plugin.Lookup(r, r.Header.Get("Content-Type"))
+	mt, c := codec.Lookup(r, r.Header.Get("Content-Type"))
 	w.Header().Set("Content-Type", mt)
 	w.WriteHeader(statusCode)
 	if body != nil {

@@ -1,16 +1,20 @@
-package plugin
+package codec
 
 import (
 	"encoding/xml"
 	"io"
 	"reflect"
+
+	"github.com/xchwan/simple-web-framework/plugin"
 )
 
 // XmlCodec provides application/xml serialization and deserialization.
-// It implements Installer to register itself into the CodecRegistry at startup.
+// It implements plugin.Installer to register itself into the CodecRegistry at startup.
+//
+//	router.AddPlugin(&codec.XmlCodec{})
 type XmlCodec struct{}
 
-func (c *XmlCodec) Install(ctx PluginContext) {
+func (c *XmlCodec) Install(ctx plugin.PluginContext) {
 	ctx[reflect.TypeOf((*CodecRegistry)(nil))].(*CodecRegistry).Register("application/xml", c)
 }
 

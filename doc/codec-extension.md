@@ -5,14 +5,14 @@
 The framework ships with a built-in `XmlCodec`. Install it to handle `application/xml` requests and responses.
 
 ```go
-import "github.com/xchwan/simple-web-framework/plugin"
+import "github.com/xchwan/simple-web-framework/plugin/codec"
 
-router.AddPlugin(&plugin.XmlCodec{})
+router.AddPlugin(&codec.XmlCodec{})
 ```
 
 ## Adding a Custom Media Type
 
-Implement `plugin.Codec` and register it via `Installer`:
+Implement `codec.Codec` and register it via `Installer`:
 
 ```go
 import (
@@ -20,12 +20,13 @@ import (
     "reflect"
 
     "github.com/xchwan/simple-web-framework/plugin"
+    "github.com/xchwan/simple-web-framework/plugin/codec"
 )
 
 type MsgpackCodec struct{}
 
 func (c *MsgpackCodec) Install(ctx plugin.PluginContext) {
-    ctx[reflect.TypeOf((*plugin.CodecRegistry)(nil))].(*plugin.CodecRegistry).
+    ctx[reflect.TypeOf((*codec.CodecRegistry)(nil))].(*codec.CodecRegistry).
         Register("application/msgpack", c)
 }
 

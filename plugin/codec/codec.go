@@ -1,4 +1,4 @@
-package plugin
+package codec
 
 import (
 	"context"
@@ -10,7 +10,14 @@ import (
 
 type codecRegistryKey struct{}
 
+// Codec handles serialization and deserialization for a specific media type.
+type Codec interface {
+	Encode(w io.Writer, v any) error
+	Decode(r io.Reader, v any) error
+}
+
 // CodecRegistry maps media types to Codec implementations and injects itself into the request context.
+// It implements plugin.ContextInjector — the framework injects it on every request automatically.
 type CodecRegistry struct {
 	codecs map[string]Codec
 }
@@ -25,7 +32,7 @@ func (cr *CodecRegistry) Register(mediaType string, c Codec) {
 	cr.codecs[mediaType] = c
 }
 
-// Inject implements ContextInjector, storing the registry in the request context.
+// Inject implements plugin.ContextInjector, storing the registry in the request context.
 func (cr *CodecRegistry) Inject(r *http.Request) *http.Request {
 	return r.WithContext(context.WithValue(r.Context(), codecRegistryKey{}, cr))
 }
@@ -44,12 +51,6 @@ func Lookup(r *http.Request, contentType string) (string, Codec) {
 		}
 	}
 	return "application/json", &jsonFallback{}
-}
-
-// Codec handles serialization and deserialization for a specific media type.
-type Codec interface {
-	Encode(w io.Writer, v any) error
-	Decode(r io.Reader, v any) error
 }
 
 // jsonFallback is the default Codec used when Lookup finds no matching media type.

@@ -12,6 +12,7 @@ import (
 	"github.com/xchwan/simple-web-framework/builtin"
 	"github.com/xchwan/simple-web-framework/hook"
 	"github.com/xchwan/simple-web-framework/plugin"
+	"github.com/xchwan/simple-web-framework/plugin/codec"
 	"github.com/xchwan/simple-web-framework/routing"
 	"github.com/xchwan/simple-web-framework/scope"
 )
@@ -50,9 +51,9 @@ func NewRouter() *Router {
 		hooks:           &hook.Hooks{},
 		shutdownTimeout: defaultShutdownTimeout,
 	}
-	cr := plugin.NewCodecRegistry()
-	cr.Register("application/json", &builtin.JsonCodec{})
-	cr.Register("text/plain", &builtin.TextCodec{})
+	cr := codec.NewCodecRegistry()
+	cr.Register("application/json", &codec.JsonCodec{})
+	cr.Register("text/plain", &codec.TextCodec{})
 	r.plugins[reflect.TypeOf(cr)] = cr
 	return r
 }

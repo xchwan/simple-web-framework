@@ -2,6 +2,7 @@ package apidoc
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
@@ -27,22 +28,29 @@ type docMeta struct {
 	options      []DocOption
 }
 
-// Doc stores request/response type metadata in docs keyed by the handler's function pointer,
-// then returns the original handler unchanged. The router calls docs.RouteAdded which matches
-// the pointer, completes the record with method and path, and clears the pending entry.
+// pending is a package-level store that maps a handler's function pointer (uintptr)
+// to its docMeta. Doc writes into it; DocPlugin.RouteAdded reads from it.
+// Using a package-level map means Doc does not need to receive *DocPlugin as a parameter —
+// the two sides rendezvous implicitly through the function pointer key.
+var pending sync.Map // map[uintptr]docMeta
+
+// Doc annotates a handler with request/response type information for API documentation.
+// It stores the metadata in a package-level map keyed by f's function pointer, then
+// returns f unchanged. When the router registers the route, DocPlugin.RouteAdded is
+// called with the same function pointer and picks up the metadata automatically.
 //
 // opts accepts a plain string (treated as Summary) or any number of DocOption values:
 //
 //	// plain string → summary
-//	doc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user")
+//	apidoc.Doc[CreateUserRequest, UserResponse](h.Create, "Register a new user")
 //
 //	// explicit options
-//	doc.Doc[CreateUserRequest, UserResponse](docs, h.Create,
-//	    doc.Summary("Register a new user"),
-//	    doc.Description("Email must be unique."),
-//	    doc.Tags("users"),
+//	apidoc.Doc[CreateUserRequest, UserResponse](h.Create,
+//	    apidoc.Summary("Register a new user"),
+//	    apidoc.Description("Email must be unique."),
+//	    apidoc.Tags("users"),
 //	)
-func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc, opts ...any) HandlerFunc {
+func Doc[Req, Resp any](f HandlerFunc, opts ...any) HandlerFunc {
 	var req Req
 	var resp Resp
 	meta := docMeta{
@@ -57,7 +65,7 @@ func Doc[Req, Resp any](docs *DocPlugin, f HandlerFunc, opts ...any) HandlerFunc
 			meta.options = append(meta.options, v)
 		}
 	}
-	docs.pending.Store(reflect.ValueOf(f).Pointer(), meta)
+	pending.Store(reflect.ValueOf(f).Pointer(), meta)
 	return f
 }
 
@@ -78,13 +86,12 @@ type routeDoc struct {
 //	docs := apidoc.NewDocPlugin()
 //	router.AddPlugin(docs)
 //	router.POST("/api/users", h.Create,
-//	    apidoc.Doc[CreateUserRequest, UserResponse](docs, h.Create, "Register a new user"))
+//	    apidoc.Doc[CreateUserRequest, UserResponse](h.Create, "Register a new user"))
 //	router.GET("/docs",         docs.UIHandler())
 //	router.GET("/openapi.json", docs.SpecHandler())
 type DocPlugin struct {
-	pending sync.Map // map[uintptr]docMeta
-	mu      sync.RWMutex
-	routes  []routeDoc
+	mu     sync.RWMutex
+	routes []routeDoc
 }
 
 // NewDocPlugin creates a new, empty DocPlugin.
@@ -96,7 +103,7 @@ var noBodyType = reflect.TypeOf(struct{}{})
 
 // RouteAdded implements plugin.RouteHook. Called once per route at registration time.
 func (d *DocPlugin) RouteAdded(method, path string, f HandlerFunc) {
-	val, ok := d.pending.LoadAndDelete(reflect.ValueOf(f).Pointer())
+	val, ok := pending.LoadAndDelete(reflect.ValueOf(f).Pointer())
 	if !ok {
 		return
 	}
@@ -156,6 +163,11 @@ func (d *DocPlugin) UIHandler() HandlerFunc {
 func (d *DocPlugin) buildSpec() map[string]any {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+
+	pending.Range(func(k, v any) bool {
+		log.Println("[apidoc] warning: Doc[] was called but DocPlugin is not registered — call router.AddPlugin(docs)")
+		return false // 只印一次
+	})
 
 	paths := make(map[string]any)
 	for _, r := range d.routes {

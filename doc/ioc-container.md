@@ -2,34 +2,30 @@
 
 ## Registering Dependencies
 
-Use `router.Bind` to register a named dependency. `Bind` only records the factory function — the function does **not** run until someone calls `Resolve` or `Get[T]` for that name.
+Use `router.Bind` to register a named dependency. `Bind` only records the factory function — the function does **not** run until someone calls `Get[T]` for that name.
 
 The default scope is **Singleton** — omit the third argument and you get one shared instance for the lifetime of the app.
+
+For Singleton dependencies (DB connections, repositories), it is simpler to construct them directly and capture them in the factory closure rather than going through the container:
 
 ```go
 import "github.com/xchwan/simple-web-framework/scope"
 
-// 🔒 Singleton (default) — created once, shared for the lifetime of the app
-router.Bind("userRepo", func() any {
-    return NewUserDB(db)
-})
-router.Bind("redis", func() any {
-    return redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-})
+// Singletons — construct directly
+db   := NewUserDB(dsn)
+repo := NewUserRepo(db)
+rdb  := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
 
-// 🌐 HttpRequestScope — a fresh userService is created for every request.
-// Inside the factory, Resolve pulls userRepo and redis from the singleton pool,
-// so DB and Redis connections are still shared — only the service layer is per-request.
+// 🌐 HttpRequestScope — a fresh userService per request.
+// repo and rdb are captured from the outer scope (no Bind needed for them).
 router.Bind("userService", func() any {
-    repo := router.Resolve("userRepo").(*UserDB)
-    rdb  := router.Resolve("redis").(*redis.Client)
     return NewUserService(repo, rdb)
 }, scope.NewHttpRequestScope())
 ```
 
 ## Resolving Dependencies in Handlers
 
-Use `framework.Get[T]` inside a handler to retrieve a dependency from the request context.
+Use `framework.Get[T]` inside a handler to retrieve a dependency from the request context:
 
 ```go
 router.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
@@ -39,23 +35,7 @@ router.GET("/api/users", func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
-`Get[T]` resolves `userService` for this request. Because it is `HttpRequestScope`, the same instance is returned for every `Get` call within the same request — two handlers in the same request pipeline share one `UserService`.
-
-## Resolving at Startup
-
-`router.Resolve` retrieves a Singleton outside of a request — useful for wiring handlers at startup.
-
-```go
-router.Bind("userRepo",    func() any { return NewUserDB(db) })
-router.Bind("userHandler", func() any {
-    repo := router.Resolve("userRepo").(*UserDB)
-    return NewUserHandler(repo)
-})
-
-h := router.Resolve("userHandler").(*UserHandler)
-router.GET("/api/users", h.List)
-router.POST("/api/users", h.Create)
-```
+Because `userService` is `HttpRequestScope`, the same instance is returned for every `Get[T]` call within the same request.
 
 ## Scopes (Lifecycle)
 
@@ -63,16 +43,16 @@ router.POST("/api/users", h.Create)
 |-------|-------------|-------------|
 | 🔒 `SingletonScope` | One instance for the entire application | omit (default) |
 | 🌐 `HttpRequestScope` | One instance shared within a single HTTP request | `scope.NewHttpRequestScope()` |
-| 🆕 `PrototypeScope` | New instance on every `Resolve` call | `scope.NewPrototypeScope()` |
+| 🆕 `PrototypeScope` | New instance on every `Get[T]` call | `scope.NewPrototypeScope()` |
 
 **Choosing a scope:**
-- Use **Singleton** for stateless or connection-holding objects (DB, Redis, repositories)
-- Use **HttpRequestScope** for objects that carry per-request state (services, unit-of-work)
+- Use **Singleton** (or just construct directly) for DB connections, Redis clients, repositories
+- Use **HttpRequestScope** for service-layer objects that carry per-request state
 - Use **Prototype** when each caller needs its own isolated instance (buffers, parsers)
 
 ## Common Mistake: Resolving Without Binding
 
-Calling `Get[T]` or `router.Resolve` for a name that was never registered panics immediately with a clear message:
+Calling `Get[T]` for a name that was never registered panics immediately with a clear message:
 
 ```
 panic: dependency "userService" not found — register it with router.Bind("userService", func() any { return ... })
@@ -82,7 +62,7 @@ Make sure every name you resolve has a corresponding `Bind`:
 
 ```go
 // ✅ correct
-router.Bind("userService", func() any { return NewUserService() })
+router.Bind("userService", func() any { return NewUserService(repo) }, scope.NewHttpRequestScope())
 svc := framework.Get[*UserService](r, "userService")
 
 // ❌ panics — "userService" was never bound

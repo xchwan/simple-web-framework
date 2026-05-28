@@ -83,8 +83,8 @@ func (ro *Router) Bind(name string, factory func() any, s ...scope.Scope) {
 	ro.container.Register(name, factory, s...)
 }
 
-// Resolve retrieves a named dependency from the container. Intended for use during startup wiring.
-func (ro *Router) Resolve(name string) any {
+// resolve retrieves a named dependency from the container. Internal use only.
+func (ro *Router) resolve(name string) any {
 	return ro.container.Resolve(context.Background(), name)
 }
 

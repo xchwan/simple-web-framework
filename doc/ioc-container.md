@@ -4,6 +4,8 @@
 
 Use `router.Bind` to register a named dependency. `Bind` only records the factory function — the function does **not** run until someone calls `Resolve` or `Get[T]` for that name.
 
+The default scope is **Singleton** — omit the third argument and you get one shared instance for the lifetime of the app.
+
 ```go
 import "github.com/xchwan/simple-web-framework/scope"
 
@@ -59,7 +61,7 @@ router.POST("/api/users", h.Create)
 
 | Scope | Description | Constructor |
 |-------|-------------|-------------|
-| 🔒 `SingletonScope` (default) | One instance for the entire application | `scope.NewSingletonScope()` |
+| 🔒 `SingletonScope` | One instance for the entire application | omit (default) |
 | 🌐 `HttpRequestScope` | One instance shared within a single HTTP request | `scope.NewHttpRequestScope()` |
 | 🆕 `PrototypeScope` | New instance on every `Resolve` call | `scope.NewPrototypeScope()` |
 

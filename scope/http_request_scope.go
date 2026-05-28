@@ -17,9 +17,17 @@ type RequestScopeStore struct {
 
 // HttpRequestScope creates one instance per HTTP request.
 // Distinct requests each get their own independent instance.
-type HttpRequestScope struct{}
+//
+// The unexported _ byte field makes this a non-zero-size struct.
+// Without it, Go would point all instances to runtime.zerobase,
+// making every *HttpRequestScope identical as a map key and causing
+// different bindings to collide in the RequestScopeStore.
+type HttpRequestScope struct {
+	_ byte
+}
 
 // NewHttpRequestScope creates an HttpRequestScope.
+// Each call returns a pointer with a unique address, used as the store key.
 func NewHttpRequestScope() *HttpRequestScope {
 	return &HttpRequestScope{}
 }

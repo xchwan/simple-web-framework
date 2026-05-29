@@ -1,18 +1,28 @@
 # 🗜️ Codec Extension
 
-## Enable XML Support
+## Built-in Optional Codecs
 
-The framework ships with a built-in `XmlCodec`. Install it to handle `application/xml` requests and responses.
+The following codecs ship with the framework but must be installed manually:
 
 ```go
 import "github.com/xchwan/simple-web-framework/plugin/codec"
 
-router.AddPlugin(&codec.XmlCodec{})
+router.AddPlugin(&codec.XmlCodec{})      // application/xml
+router.AddPlugin(&codec.YamlCodec{})     // application/yaml
+router.AddPlugin(&codec.MsgpackCodec{})  // application/msgpack
 ```
+
+| Codec | Media Type | Default |
+|-------|-----------|---------|
+| `JsonCodec` | `application/json` | ✅ Auto |
+| `TextCodec` | `text/plain` | ✅ Auto |
+| `XmlCodec` | `application/xml` | 🔧 Manual |
+| `YamlCodec` | `application/yaml` | 🔧 Manual |
+| `MsgpackCodec` | `application/msgpack` | 🔧 Manual |
 
 ## Adding a Custom Media Type
 
-Implement `codec.Codec` and register it via `Installer`:
+Implement `codec.Codec` and register it via `plugin.Installer`:
 
 ```go
 import (
@@ -23,23 +33,17 @@ import (
     "github.com/xchwan/simple-web-framework/plugin/codec"
 )
 
-type MsgpackCodec struct{}
+type TomlCodec struct{}
 
-func (c *MsgpackCodec) Install(ctx plugin.PluginContext) {
+func (c *TomlCodec) Install(ctx plugin.PluginContext) {
     ctx[reflect.TypeOf((*codec.CodecRegistry)(nil))].(*codec.CodecRegistry).
-        Register("application/msgpack", c)
+        Register("application/toml", c)
 }
 
-func (c *MsgpackCodec) Encode(w io.Writer, v any) error {
-    return msgpack.NewEncoder(w).Encode(v)
-}
+func (c *TomlCodec) Encode(w io.Writer, v any) error { ... }
+func (c *TomlCodec) Decode(r io.Reader, v any) error { ... }
 
-func (c *MsgpackCodec) Decode(r io.Reader, v any) error {
-    return msgpack.NewDecoder(r).Decode(v)
-}
-
-// Install
-router.AddPlugin(&MsgpackCodec{})
+router.AddPlugin(&TomlCodec{})
 ```
 
 ## How It Works
@@ -47,6 +51,8 @@ router.AddPlugin(&MsgpackCodec{})
 `CodecRegistry` is a hash map keyed by media type string. At request time:
 
 - `ParseRequest` / `ParseOrRespond` look up the `Content-Type` header → select decoder
-- `Respond` looks up the `Accept` header → select encoder
+- `Respond` looks up the `Content-Type` header → select encoder
+
+Falls back to JSON when no matching codec is found.
 
 This is the **Command dispatch table** pattern: key → codec → execute.

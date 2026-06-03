@@ -14,19 +14,25 @@ go get github.com/xchwan/simple-web-framework
 package main
 
 import (
+    "context"
     "net/http"
+    "os/signal"
+    "syscall"
 
     framework "github.com/xchwan/simple-web-framework"
 )
 
 func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
     r := framework.NewRouter()
 
     r.GET("/hello", func(w http.ResponseWriter, r *http.Request) {
         framework.Respond(w, r, http.StatusOK, map[string]string{"message": "Hello, World!"})
     })
 
-    r.Run(":8080")
+    r.Run(ctx, ":8080")
 }
 ```
 

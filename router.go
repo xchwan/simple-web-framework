@@ -4,9 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os/signal"
 	"reflect"
-	"syscall"
 	"time"
 
 	"github.com/xchwan/simple-web-framework/builtin"
@@ -143,14 +141,21 @@ func (ro *Router) PATCH(path string, f HandlerFunc, m ...MiddlewareFunc) {
 }
 
 // Run starts the HTTP server and listens on the given address (e.g. ":8080").
-// It blocks until SIGINT or SIGTERM is received, then gracefully shuts down:
-// new requests are rejected and in-flight requests are given up to
-// SetShutdownTimeout (default 5s) to complete before the server exits.
-func (ro *Router) Run(addr string) error {
+// It blocks until ctx is cancelled, then gracefully shuts down: new requests
+// are rejected and in-flight requests are given up to SetShutdownTimeout
+// (default 5s) to complete before the server exits.
+//
+// The caller is responsible for cancelling ctx (e.g. via signal.NotifyContext),
+// which allows coordinating shutdown order with other components such as
+// message consumers:
+//
+//	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+//	defer stop()
+//
+//	go consumer.Run(ctx)
+//	router.Run(ctx, ":8080")  // blocks until ctx is cancelled
+func (ro *Router) Run(ctx context.Context, addr string) error {
 	srv := &http.Server{Addr: addr, Handler: ro}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		log.Printf("Server listening on %s", addr)

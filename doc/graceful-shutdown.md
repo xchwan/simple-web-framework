@@ -12,29 +12,51 @@ This matters in practice:
 
 ## How It Works
 
-`Router.Run` handles this automatically. When `SIGINT` or `SIGTERM` is received:
+`Router.Run` accepts a `context.Context`. When the context is cancelled, it:
 
-1. Stop accepting new requests
-2. Wait for in-flight requests to finish (up to the configured timeout)
-3. Exit cleanly
+1. Stops accepting new requests
+2. Waits for in-flight requests to finish (up to the configured timeout)
+3. Returns
 
+Signal handling lives in `main.go`, giving you full control over shutdown order:
+
+```go
+import (
+    "context"
+    "os/signal"
+    "syscall"
+)
+
+func main() {
+    ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+    defer stop()
+
+    router := framework.NewRouter()
+    // ... register routes ...
+    router.Run(ctx, ":8080")
+}
 ```
-收到 SIGTERM
-  → 停止接受新 request
-  → 等現有 request 跑完（預設最多 5 秒）
-  → 正常退出
-```
 
-No code changes are needed in handlers — `r.Run(":8080")` already does this.
+## Coordinating Multiple Components
+
+Because `Run` takes an external `ctx`, you can coordinate shutdown order with other long-running components — for example, stopping a Kafka consumer only after the HTTP server has drained:
+
+```go
+ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+defer stop()
+
+go consumer.Run(ctx)      // consumer stops when ctx is cancelled
+router.Run(ctx, ":8080")  // HTTP server drains, then returns
+// after Run returns, consumer is also stopped
+```
 
 ## Setting the Timeout
 
-The default timeout is 5 seconds. Override it with `SetShutdownTimeout` before calling `Run`:
+The default drain timeout is 5 seconds. Override it before calling `Run`:
 
 ```go
-router := framework.NewRouter()
 router.SetShutdownTimeout(10 * time.Second)
-router.Run(":8080")
+router.Run(ctx, ":8080")
 ```
 
 If in-flight requests do not finish within the timeout, the server exits anyway — the timeout is a safety net, not a guarantee.
